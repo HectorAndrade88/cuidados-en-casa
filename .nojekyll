@@ -1,0 +1,4 @@
+Este archivo vacío desactiva Jekyll en GitHub Pages.
+Sin él, GitHub ignora los archivos y carpetas que empiezan por guion bajo
+y procesa el HTML antes de publicarlo. Cuida es un sitio estático puro:
+queremos que los archivos se sirvan tal cual.

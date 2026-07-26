@@ -1,0 +1,18 @@
+# Respaldos: van cifrados, pero no tienen por qué acabar en un repositorio público
+cuida-respaldo-*.json
+cuida-historial*.csv
+
+# Archivos de trabajo
+node_modules/
+package-lock.json
+package.json
+app.js
+dbg.txt
+test.js
+test2.js
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini

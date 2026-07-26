@@ -1,0 +1,2159 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- ============================================================
+       SEGURIDAD DE LA INFORMACIÓN (defensa en profundidad)
+       - CSP: sin scripts externos, sin conexiones de red salientes
+         (connect-src 'none') => los datos clínicos NO pueden salir
+         del dispositivo aunque se inyectara código.
+       - object/frame/base/form-action bloqueados: sin incrustaciones
+         ni envíos de formulario a terceros.
+       - noindex: la página es pública en GitHub Pages, pero no debe
+         aparecer en buscadores.
+       ============================================================ -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="theme-color" content="#3a5bd0">
+  <meta name="description" content="Cuida: seguimiento domiciliario de medicación y síntomas para cuidados paliativos.">
+  <title>Cuida · Seguimiento domiciliario</title>
+  <style>
+  /* ============================================================
+     CUIDA · Hoja de estilos
+     Organización:
+       1. Tokens (variables) + temas (claro/oscuro/alto contraste/grande)
+       2. Base y accesibilidad (foco, movimiento reducido)
+       3. Layout (app, sidebar, contenido)
+       4. Componentes (tarjetas, botones, píldoras, tablas, formularios)
+       5. Diálogos y toasts
+       6. Responsive (mobile-first con overrides)
+     Todos los colores usan variables para poder tematizar.
+     ============================================================ */
+
+  /* 1. TOKENS ------------------------------------------------- */
+  :root{
+    --bg:#f4f6fb;
+    --surface:#ffffff;
+    --surface-2:#f8fafc;
+    --ink:#16202e;         /* texto principal */
+    --muted:#5a6478;       /* texto secundario · AA sobre superficie */
+    --line:#e2e8f2;
+    --primary:#3a5bd0;
+    --primary-ink:#ffffff; /* texto sobre color primario */
+    --primary-soft:#eaf0ff;
+    --primary-soft-ink:#2b46b0;
+    --good:#0f6f52; --good-bg:#e6f6ef;
+    --warn:#92500a; --warn-bg:#fff3df;
+    --bad:#b31f3f;  --bad-bg:#ffe9ee;
+    --focus:#1746e0;
+    --radius:14px;
+    --shadow:0 8px 26px rgba(29,46,74,.08);
+    /* Tipografía fluida: escala con el viewport dentro de límites */
+    --fs-base:clamp(15px, 0.9rem + 0.2vw, 17px);
+    --fs-h1:clamp(1.35rem, 1.1rem + 1.4vw, 1.75rem);
+    --fs-h2:clamp(1.05rem, 0.98rem + 0.4vw, 1.2rem);
+    --tap:44px; /* tamaño táctil mínimo (WCAG) */
+  }
+  /* Tema oscuro */
+  body.dark{
+    --bg:#0f1726; --surface:#172133; --surface-2:#1c2740;
+    --ink:#e8eef8; --muted:#a9b7cd; --line:#2b3a54;
+    --primary:#6f8cff; --primary-ink:#0b1120;
+    --primary-soft:#26365f; --primary-soft-ink:#cdd9ff;
+    --good:#4fd6a6; --good-bg:#123a30;
+    --warn:#f2b24a; --warn-bg:#3a2c12;
+    --bad:#ff8098;  --bad-bg:#3a1420;
+    --focus:#9db4ff; --shadow:none;
+  }
+  /* Alto contraste (negro sobre blanco, bordes marcados) */
+  body.high{
+    --bg:#ffffff; --surface:#ffffff; --surface-2:#ffffff;
+    --ink:#000000; --muted:#1a1a1a; --line:#000000;
+    --primary:#0000c4; --primary-ink:#ffffff;
+    --primary-soft:#dfe4ff; --primary-soft-ink:#0000a0;
+    --good:#005c3c; --good-bg:#dff5ec;
+    --warn:#7a3d00; --warn-bg:#fff0d6;
+    --bad:#a5001f;  --bad-bg:#ffe0e6;
+    --focus:#0000c4; --shadow:none;
+  }
+  /* Fuente y controles grandes */
+  body.large{ --fs-base:19px; --tap:52px; }
+  body.large .btn{ padding:14px 18px; }
+
+  /* 2. BASE Y ACCESIBILIDAD ---------------------------------- */
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:var(--fs-base)/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+  button,input,select,textarea{ font:inherit; color:inherit; }
+  h1,h2,h3{ line-height:1.2; }
+
+  /* Foco visible y consistente para navegación por teclado */
+  :focus-visible{ outline:3px solid var(--focus); outline-offset:2px; border-radius:6px; }
+  /* Evita doble anillo en elementos sin foco por teclado */
+  :focus:not(:focus-visible){ outline:none; }
+
+  /* Enlace de salto al contenido principal */
+  .skip{
+    position:absolute; left:8px; top:-60px; z-index:50;
+    background:var(--surface); color:var(--ink); padding:10px 14px;
+    border:2px solid var(--focus); border-radius:8px; transition:top .15s;
+  }
+  .skip:focus{ top:8px; }
+
+  /* Respeta a quien prefiere menos movimiento */
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{ animation-duration:.001ms!important; transition-duration:.001ms!important; scroll-behavior:auto!important; }
+  }
+
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+  }
+
+  /* 3. LAYOUT ------------------------------------------------- */
+  .app{ min-height:100vh; display:grid; grid-template-columns:240px 1fr; }
+
+  .side{
+    background:linear-gradient(180deg,#1c2a4e,#111a30); color:#fff; padding:22px 14px;
+    position:sticky; top:0; height:100vh; display:flex; flex-direction:column;
+  }
+  body.dark .side{ background:linear-gradient(180deg,#101a30,#0a1120); }
+  body.high .side{ background:#000; }
+  .brand{ display:flex; align-items:center; gap:10px; font-size:1.4rem; font-weight:800; margin:0 8px 24px; }
+  .brand i{
+    width:38px; height:38px; border-radius:11px;
+    background:linear-gradient(135deg,var(--primary),#6f8cff); box-shadow:0 6px 16px rgba(58,91,208,.45);
+    color:#fff; display:grid; place-items:center; font-style:normal; font-size:1.1rem;
+  }
+  .nav a .ic svg{ display:block; }
+  .nav{ display:flex; flex-direction:column; gap:4px; }
+  .nav a{
+    display:flex; align-items:center; gap:12px; min-height:var(--tap);
+    padding:10px 14px; border-radius:10px; color:#cbd5e1;
+    text-decoration:none; font-weight:600;
+  }
+  .nav a .ic{ width:22px; height:22px; display:grid; place-items:center; flex:none; }
+  .nav a:hover{ background:rgba(255,255,255,.12); color:#fff; }
+  .nav a[aria-current="page"]{ background:var(--primary); color:#fff; }
+  body.high .nav a{ color:#fff; }
+  body.high .nav a[aria-current="page"]{ background:#fff; color:#000; }
+  .side-foot{ margin-top:auto; color:#9fb0cc; font-size:.8rem; padding:12px 8px 0; }
+
+  .main{ min-width:0; display:flex; flex-direction:column; }
+  .top{
+    min-height:64px; padding:12px 28px; display:flex; align-items:center;
+    justify-content:space-between; gap:16px;
+    background:var(--surface); border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:3;
+  }
+  .top .who{ font-weight:600; }
+  .clock{ color:var(--muted); font-size:.9rem; }
+  .clock strong{ color:var(--ink); font-size:1.05rem; margin-left:6px; }
+  .content{ padding:26px; max-width:1240px; width:100%; margin:0 auto; }
+  .page{ animation:fade .2s ease; }
+  @keyframes fade{ from{ opacity:0; transform:translateY(4px);} to{ opacity:1; transform:none;} }
+
+  .title-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:22px; flex-wrap:wrap; }
+  .title-row h1{ margin:0; font-size:var(--fs-h1); }
+  .sub{ color:var(--muted); margin:6px 0 0; }
+  .section-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin:30px 0 12px; flex-wrap:wrap; }
+  .section-head h2{ margin:0; font-size:var(--fs-h2); }
+
+  /* 4. COMPONENTES ------------------------------------------- */
+  .grid{ display:grid; gap:16px; }
+  .stats{ grid-template-columns:repeat(4,1fr); }
+  .two{ grid-template-columns:1.3fr .7fr; }
+
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
+  .card > b{ display:block; margin-bottom:6px; }
+
+  .stat{ position:relative; }
+  .stat .label{ color:var(--muted); font-size:.85rem; }
+  .stat .n{ font-size:1.9rem; font-weight:700; margin-top:4px; }
+  .stat .icon{ position:absolute; top:16px; right:16px; background:var(--primary-soft); color:var(--primary-soft-ink); padding:8px; border-radius:10px; width:38px; height:38px; display:grid; place-items:center; }
+
+  .progress{ height:10px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:12px; }
+  .progress i{ display:block; height:100%; background:linear-gradient(90deg,var(--primary),#5aa9d6); border-radius:inherit; }
+
+  .next{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:14px; }
+  .med-icon{ width:58px; height:58px; border-radius:13px; object-fit:cover; background:var(--primary-soft); }
+
+  /* Píldoras de estado (texto con contraste AA) */
+  .pill{ display:inline-block; font-size:.78rem; padding:4px 10px; border-radius:99px; font-weight:700; background:var(--good-bg); color:var(--good); }
+  .pill.warn{ background:var(--warn-bg); color:var(--warn); }
+  .pill.bad{ background:var(--bad-bg); color:var(--bad); }
+
+  /* Botones: enlaces navegan, botones actúan */
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    min-height:var(--tap); padding:10px 15px; border:1px solid transparent; border-radius:10px;
+    background:var(--primary); color:var(--primary-ink); font-weight:700; cursor:pointer; text-decoration:none;
+  }
+  .btn:hover{ filter:brightness(.95); }
+  .btn.secondary{ background:var(--primary-soft); color:var(--primary-soft-ink); }
+  .btn.danger{ background:var(--bad-bg); color:var(--bad); border-color:transparent; }
+  .btn.small{ min-height:36px; padding:7px 11px; font-size:.85rem; }
+  body.large .btn.small{ min-height:44px; }
+  body.high .btn{ border-color:#000; }
+
+  .list{ padding:0; margin:0; list-style:none; }
+  .list li{ padding:13px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:12px; align-items:center; }
+  .list li:last-child{ border:0; }
+  .muted{ color:var(--muted); }
+
+  .agenda{ display:grid; gap:12px; }
+  .agenda-card{ display:grid; grid-template-columns:66px 58px 1fr auto; align-items:center; gap:14px; }
+  .time{ font-size:1.15rem; font-weight:800; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .status{ font-size:.82rem; color:var(--muted); margin-top:4px; }
+
+  .alert{ border-left:4px solid var(--warn); background:var(--warn-bg); color:var(--ink); padding:11px 14px; border-radius:8px; margin:10px 0; }
+  .alert.bad{ border-color:var(--bad); background:var(--bad-bg); }
+  .notice{ padding:12px; border-radius:10px; background:var(--good-bg); color:var(--good); font-size:.9rem; margin-top:12px; }
+
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .input{
+    min-height:var(--tap); width:100%;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    padding:10px 12px; border-radius:10px;
+  }
+  .input::placeholder{ color:var(--muted); opacity:1; }
+  .search{ max-width:340px; }
+
+  .table-wrap{ overflow-x:auto; }
+  .table{ width:100%; border-collapse:collapse; font-size:.9rem; }
+  .table caption{ text-align:left; color:var(--muted); padding:0 0 10px; }
+  .table th{ text-align:left; color:var(--muted); font-weight:600; background:var(--surface-2); }
+  .table th,.table td{ padding:12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .med-row{ display:flex; align-items:center; gap:10px; }
+  .thumb{ width:40px; height:40px; border-radius:9px; object-fit:cover; background:var(--primary-soft); flex:none; }
+  .empty{ text-align:center; padding:28px; color:var(--muted); }
+
+  /* Formularios */
+  .form{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+  .form label{ font-size:.85rem; font-weight:700; color:var(--muted); display:block; }
+  .form label .req{ color:var(--bad); }
+  .form .input,.form textarea,.form select{ margin-top:5px; }
+  .form .full{ grid-column:1/-1; }
+  .form textarea{ min-height:84px; resize:vertical; }
+  .hint{ font-weight:500; color:var(--muted); font-size:.8rem; margin-top:4px; }
+  /* Mensaje de error accesible por campo */
+  .err{ color:var(--bad); font-size:.82rem; font-weight:600; margin-top:5px; min-height:0; }
+  .input[aria-invalid="true"]{ border-color:var(--bad); outline-color:var(--bad); }
+
+  .drop{ border:2px dashed var(--line); border-radius:12px; padding:16px; text-align:center; color:var(--muted); }
+  .drop.over{ border-color:var(--primary); background:var(--primary-soft); }
+  .photo-preview{ width:76px; height:76px; border-radius:12px; object-fit:cover; margin-top:10px; }
+
+  .switch{ display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); padding:14px 0; min-height:var(--tap); }
+  .switch:last-child{ border:0; }
+  .switch input{ width:22px; height:22px; }
+  .settings{ grid-template-columns:1fr; max-width:760px; }
+
+  /* --- Cuidadores: avatares, chips y selección múltiple --- */
+  .card.hover{ transition:transform .15s ease, box-shadow .15s ease; }
+  .card.hover:hover{ transform:translateY(-2px); box-shadow:0 14px 34px rgba(29,46,74,.14); }
+  .cargrid{ grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); }
+  .avatar{
+    width:46px; height:46px; border-radius:50%; flex:none; display:grid; place-items:center;
+    font-weight:800; color:#fff; background:linear-gradient(135deg,var(--primary),#6f8cff);
+  }
+  .avatar.sm{ width:30px; height:30px; font-size:.72rem; }
+  .car-head{ display:flex; align-items:center; gap:12px; }
+  .car-meds{ margin-top:14px; }
+  .car-line{ display:inline-flex; align-items:center; gap:9px; }
+  /* Chips (medicamentos asignados) */
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:99px;
+    background:var(--primary-soft); color:var(--primary-soft-ink); font-size:.78rem; font-weight:600;
+  }
+  .chip .dot,.check .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  /* Selección múltiple con casillas tipo chip */
+  .checks{ border:0; padding:0; margin:0; display:flex; flex-wrap:wrap; gap:8px; }
+  .checks legend{ font-size:.85rem; font-weight:700; color:var(--muted); margin-bottom:6px; width:100%; padding:0; }
+  .check{
+    display:inline-flex; align-items:center; gap:8px; padding:8px 12px; min-height:var(--tap);
+    border:1px solid var(--line); border-radius:10px; cursor:pointer; background:var(--surface); font-weight:600;
+  }
+  .check input{ width:18px; height:18px; }
+  .check:has(input:checked){ border-color:var(--primary); background:var(--primary-soft); color:var(--primary-soft-ink); }
+  .check:focus-within{ outline:3px solid var(--focus); outline-offset:2px; }
+  .chips.mini .chip{ font-size:.72rem; padding:3px 9px; }
+
+  /* 5. DIÁLOGOS Y TOASTS ------------------------------------- */
+  .modal-backdrop{
+    position:fixed; inset:0; z-index:40; background:rgba(15,23,42,.55);
+    display:flex; align-items:center; justify-content:center; padding:18px;
+  }
+  .modal-backdrop[hidden]{ display:none; }
+  .dialog{
+    background:var(--surface); color:var(--ink); border:1px solid var(--line);
+    border-radius:18px; padding:24px; width:min(760px,100%); max-height:92vh; overflow:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.35);
+  }
+  .dialog.sm{ width:min(440px,100%); }
+  .dialog h2{ margin:0 0 16px; font-size:var(--fs-h2); }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; margin-top:22px; flex-wrap:wrap; }
+
+  .toasts{ position:fixed; right:16px; bottom:16px; z-index:60; display:flex; flex-direction:column; gap:10px; max-width:min(360px,92vw); }
+  .toast{
+    background:var(--surface); color:var(--ink); border:1px solid var(--line);
+    border-left:4px solid var(--primary); border-radius:10px; padding:12px 14px;
+    box-shadow:var(--shadow); animation:fade .2s ease;
+  }
+  .toast.good{ border-left-color:var(--good); }
+  .toast.bad{ border-left-color:var(--bad); }
+
+  /* 6. RESPONSIVE -------------------------------------------- */
+  /* Móvil/tablet: sidebar pasa a barra inferior fija con targets táctiles */
+  @media (max-width:860px){
+    .app{ display:block; }
+    .side{
+      position:fixed; bottom:0; left:0; right:0; top:auto; height:auto; z-index:30;
+      flex-direction:row; align-items:center; padding:6px 8px calc(6px + env(safe-area-inset-bottom));
+      border-top:1px solid var(--line);
+    }
+    .brand,.side-foot{ display:none; }
+    .nav{ flex-direction:row; width:100%; justify-content:space-around; gap:2px; overflow-x:auto; }
+    .nav a{ flex-direction:column; gap:3px; font-size:.68rem; padding:6px 4px; min-width:58px; flex:1 0 auto; justify-content:center; }
+    .content{ padding:20px 15px; }
+    .main{ padding-bottom:76px; } /* espacio para la barra inferior */
+    .top{ padding:12px 16px; }
+    .stats{ grid-template-columns:repeat(2,1fr); }
+    .two{ grid-template-columns:1fr; }
+    .agenda-card{ grid-template-columns:56px 46px 1fr; }
+    .agenda-card .actions{ grid-column:1/-1; }
+  }
+
+  /* Tablas apiladas tipo tarjeta en pantallas pequeñas (mejor lectura móvil) */
+  @media (max-width:560px){
+    .stats{ grid-template-columns:1fr; }
+    .form{ grid-template-columns:1fr; }
+    .title-row .btn{ width:100%; }
+    .table thead{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+    .table, .table tbody, .table tr, .table td{ display:block; width:100%; }
+    .table tr{ border:1px solid var(--line); border-radius:12px; margin-bottom:12px; padding:6px 12px; background:var(--surface); }
+    .table td{ border:0; display:flex; justify-content:space-between; gap:12px; padding:8px 0; text-align:right; }
+    .table td::before{ content:attr(data-label); font-weight:700; color:var(--muted); text-align:left; }
+    .table td .med-row{ justify-content:flex-end; }
+  }
+
+  /* 7. SEGURIDAD: PANTALLA DE BLOQUEO ------------------------- */
+  /* Al bloquear, la app se retira del render: los datos no quedan
+     visibles ni siquiera desenfocados detrás de la capa. */
+  .lock{
+    position:fixed; inset:0; z-index:70; display:grid; place-items:center; padding:20px;
+    background:linear-gradient(160deg,#16223d,#0d1424);
+  }
+  .lock[hidden]{ display:none; }
+  body.locked .app,body.locked .toasts{ display:none; }
+  .lock-box{
+    width:min(410px,100%); background:var(--surface); color:var(--ink);
+    border:1px solid var(--line); border-radius:20px; padding:26px;
+    box-shadow:0 26px 70px rgba(0,0,0,.5);
+  }
+  .lock-logo{
+    width:54px; height:54px; border-radius:16px; display:grid; place-items:center;
+    background:linear-gradient(135deg,var(--primary),#6f8cff); color:#fff; font-size:1.5rem;
+    margin-bottom:16px; box-shadow:0 8px 20px rgba(58,91,208,.4);
+  }
+  .lock-box h1{ margin:0 0 6px; font-size:1.3rem; }
+  .pin{ letter-spacing:.5em; text-align:center; font-size:1.35rem; font-weight:700; }
+  .lock-foot{ margin-top:18px; display:flex; flex-direction:column; gap:10px; }
+
+  /* Indicadores de seguridad en Ajustes */
+  .sec-state{ display:flex; align-items:center; gap:10px; margin:10px 0 4px; }
+  .dot-state{ width:11px; height:11px; border-radius:50%; flex:none; background:var(--bad); }
+  .dot-state.on{ background:var(--good); }
+  .meter{ height:7px; border-radius:99px; background:var(--line); overflow:hidden; margin-top:8px; }
+  .meter i{ display:block; height:100%; width:0; background:var(--bad); transition:width .2s, background .2s; }
+  .meter.mid i{ background:var(--warn); } .meter.ok i{ background:var(--good); }
+
+  /* 8. FOTOS: PORTADA, GALERÍA, DETALLE Y VISOR --------------- */
+  .hero{ display:grid; grid-template-columns:minmax(130px,180px) 1fr; gap:20px; align-items:center; }
+  .hero-photo{
+    width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:16px;
+    background:var(--primary-soft); cursor:zoom-in; border:1px solid var(--line);
+  }
+  .hero-name{ font-size:1.45rem; font-weight:800; line-height:1.2; }
+
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .seg button{
+    background:var(--surface); color:var(--muted); border:0; cursor:pointer;
+    min-height:var(--tap); padding:8px 16px; font-weight:700;
+  }
+  .seg button[aria-pressed="true"]{ background:var(--primary); color:var(--primary-ink); }
+
+  .gallery{ grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); }
+  .gcard{ padding:0; overflow:hidden; display:flex; flex-direction:column; }
+  .gcard img{
+    width:100%; aspect-ratio:4/3; object-fit:cover; display:block;
+    background:var(--primary-soft); cursor:zoom-in;
+  }
+  .gbody{ padding:15px; display:flex; flex-direction:column; gap:8px; flex:1; }
+  .gbody .actions{ margin-top:auto; }
+
+  .detail{ display:grid; grid-template-columns:210px 1fr; gap:22px; align-items:start; }
+  .detail-photo{
+    width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:16px;
+    background:var(--primary-soft); border:1px solid var(--line); cursor:zoom-in;
+  }
+  .kv{ display:grid; grid-template-columns:auto 1fr; gap:8px 18px; margin:0; }
+  .kv dt{ color:var(--muted); font-size:.85rem; }
+  .kv dd{ margin:0; font-weight:600; }
+
+  .viewer img{ display:block; margin:0 auto; max-width:100%; max-height:72vh; border-radius:14px; }
+
+  /* Zona de carga de foto */
+  .drop .btn{ margin-top:8px; }
+  .photo-preview{ box-shadow:var(--shadow); border:1px solid var(--line); }
+  .photo-meta{ font-size:.78rem; color:var(--muted); margin-top:8px; }
+
+  @media (max-width:560px){
+    .hero{ grid-template-columns:96px 1fr; gap:14px; }
+    .hero-name{ font-size:1.15rem; }
+    .detail{ grid-template-columns:1fr; }
+    .detail-photo{ max-width:220px; }
+  }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Saltar al contenido</a>
+
+  <div class="app">
+    <!-- Navegación principal: enlaces (navegan entre vistas) -->
+    <aside class="side">
+      <div class="brand"><i aria-hidden="true">✚</i> Cuida</div>
+      <nav class="nav" id="nav" aria-label="Secciones"></nav>
+      <p class="side-foot">Los datos no salen de este dispositivo.<br>Sin servidor ni base de datos externa.</p>
+    </aside>
+
+    <div class="main">
+      <header class="top">
+        <div class="who" id="topPatient">Seguimiento domiciliario</div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <button class="btn secondary small" type="button" id="topLock" hidden>Bloquear</button>
+          <div class="clock">Hoy <strong id="clock">--:--</strong></div>
+        </div>
+      </header>
+      <!-- El contenido se re-renderiza; aria-live anuncia el cambio de sección -->
+      <main class="content" id="main" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <!-- Región para anuncios a lectores de pantalla (cambios de vista/acciones) -->
+  <div id="live" aria-live="polite" class="sr-only"></div>
+  <!-- Contenedor de avisos (toasts) -->
+  <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+  <!-- Host de diálogos modales accesibles -->
+  <div class="modal-backdrop" id="modalHost" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle" id="dialog"></div>
+  </div>
+  <input hidden type="file" id="importFile" accept="application/json,.json">
+
+  <!-- ============================================================
+       Pantalla de bloqueo. Se muestra si hay PIN configurado:
+       al abrir la app, tras inactividad o al pulsar "Bloquear".
+       El PIN nunca se guarda en claro (PBKDF2-SHA256 + sal).
+       ============================================================ -->
+  <div class="lock" id="lock" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+    <div class="lock-box">
+      <div class="lock-logo" aria-hidden="true">✚</div>
+      <h1 id="lockTitle">Aplicación bloqueada</h1>
+      <p class="muted" id="lockWho">Introduce el PIN para ver la información.</p>
+      <form id="lockForm" novalidate>
+        <label class="sr-only" for="lockPin">PIN de acceso</label>
+        <input class="input pin" id="lockPin" type="password" inputmode="numeric"
+               autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="12" placeholder="••••">
+        <p class="err" id="lockErr" role="alert" aria-live="assertive"></p>
+        <div class="lock-foot">
+          <button class="btn" type="submit" id="lockBtn">Desbloquear</button>
+          <button class="btn secondary" type="button" data-forgot>He olvidado el PIN</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script>
+'use strict';
+/* ============================================================
+   CUIDA · Lógica de la aplicación
+   Arquitectura por responsabilidades:
+     - StorageManager : persistencia local + respaldo automático
+     - Modelos        : Patient, Medication, Caregiver
+     - Utilidades     : MedicationSchedule, Inventory
+     - Managers       : Symptom, History, Notification, Image
+     - UI helpers     : escapeHtml, toast, Modal (diálogo accesible),
+                        confirmDialog, promptDialog
+     - App            : controlador principal (render + acciones)
+   ============================================================ */
+
+/* --- Utilidad de seguridad: escapa texto para insertar en HTML --- */
+function escapeHtml(v){
+  return String(v ?? '').replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
+
+/* Imagen de reserva cuando un medicamento no tiene foto */
+const SIN_FOTO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" fill="#eaf0ff"/>' +
+  '<path d="M58 66h64v58H58z" fill="none" stroke="#8fa6e6" stroke-width="6" rx="8"/>' +
+  '<circle cx="78" cy="88" r="9" fill="#8fa6e6"/><path d="M60 118l26-24 20 18 14-12 22 22" fill="none" stroke="#8fa6e6" stroke-width="6"/></svg>');
+
+/* --- Utilidad de seguridad: solo se admiten imágenes incrustadas ---
+   Un respaldo manipulado podría traer un src con comillas o una URL
+   externa. Se exige el formato data:image/... y se escapa siempre;
+   cualquier otra cosa se sustituye por la imagen de reserva. */
+function safeImage(src){
+  return (typeof src === 'string' && /^data:image\/(png|jpeg|jpg|webp|gif|bmp|svg\+xml)[;,]/i.test(src))
+    ? escapeHtml(src) : SIN_FOTO;
+}
+
+/* ============================================================
+   SEGURIDAD · Base criptográfica (Web Crypto del navegador)
+   Web Crypto solo existe en contexto seguro: https:// o localhost.
+   Abriendo el archivo con doble clic (file://) NO está disponible;
+   la app sigue funcionando pero se desactivan el PIN y el respaldo
+   cifrado, y se avisa al usuario en Ajustes.
+   ============================================================ */
+const SECURE = !!(window.isSecureContext && window.crypto && window.crypto.subtle);
+
+/* Identificador único (crypto.randomUUID tampoco existe en file://) */
+function uuid(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  const b = new Uint8Array(16);
+  if(window.crypto && crypto.getRandomValues) crypto.getRandomValues(b);
+  else for(let i=0;i<16;i++) b[i] = Math.floor(Math.random()*256);
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x=>x.toString(16).padStart(2,'0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+/* Base64 por bloques: evita desbordar la pila con fotos grandes */
+const B64 = {
+  from(buf){
+    const b = new Uint8Array(buf); let s = '';
+    for(let i=0;i<b.length;i+=0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i+0x8000));
+    return btoa(s);
+  },
+  to(str){ return Uint8Array.from(atob(str), c => c.charCodeAt(0)); }
+};
+
+/* ------------------------------------------------------------
+   Vault · Cifrado del archivo de respaldo
+   AES-GCM 256 (confidencialidad + autenticidad) con clave derivada
+   de la contraseña mediante PBKDF2-SHA256 y sal aleatoria.
+   Sal e IV se generan nuevos en cada exportación.
+   ------------------------------------------------------------ */
+class Vault{
+  static ITERATIONS = 310000; // recomendación OWASP para PBKDF2-SHA256
+
+  static async derive(pass, salt, iterations, usages){
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name:'PBKDF2', salt, iterations, hash:'SHA-256' },
+      base, { name:'AES-GCM', length:256 }, false, usages);
+  }
+  static async encrypt(obj, pass){
+    if(!SECURE) throw new Error('Cifrado no disponible en este contexto.');
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv   = crypto.getRandomValues(new Uint8Array(12));
+    const key  = await this.derive(pass, salt, this.ITERATIONS, ['encrypt']);
+    const ct   = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key,
+                   new TextEncoder().encode(JSON.stringify(obj)));
+    return {
+      format:'cuida-backup', version:2, app:'Cuida',
+      cipher:'AES-GCM-256', kdf:'PBKDF2-SHA256', iterations:this.ITERATIONS,
+      salt:B64.from(salt), iv:B64.from(iv), data:B64.from(ct),
+      createdAt:new Date().toISOString()
+    };
+  }
+  static async decrypt(file, pass){
+    const key = await this.derive(pass, B64.to(file.salt), file.iterations || this.ITERATIONS, ['decrypt']);
+    const out = await crypto.subtle.decrypt({name:'AES-GCM', iv:B64.to(file.iv)}, key, B64.to(file.data));
+    return JSON.parse(new TextDecoder().decode(out));
+  }
+  static isEncrypted(o){ return !!(o && o.format === 'cuida-backup' && o.data && o.salt && o.iv); }
+}
+
+/* ------------------------------------------------------------
+   PinLock · Bloqueo de pantalla
+   El PIN NO se guarda: se guarda su derivación PBKDF2 con sal.
+   Comparación en tiempo constante y retardo progresivo por fallos.
+   Nota: protege el acceso visual, no cifra los datos guardados.
+   ------------------------------------------------------------ */
+class PinLock{
+  constructor(){ this.key='cuida-pin'; this.kFails='cuida-pin-fallos'; this.kLast='cuida-pin-ultimo'; }
+  config(){ try{ return JSON.parse(localStorage.getItem(this.key)); }catch{ return null; } }
+  enabled(){ return !!this.config(); }
+
+  async digest(pin, salt, iterations){
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt, iterations, hash:'SHA-256'}, base, 256);
+    return B64.from(bits);
+  }
+  async set(pin){
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iterations = 310000;
+    localStorage.setItem(this.key, JSON.stringify({
+      salt:B64.from(salt), iterations,
+      hash: await this.digest(pin, salt, iterations),
+      createdAt: new Date().toISOString()
+    }));
+    this.resetFails();
+  }
+  clear(){ localStorage.removeItem(this.key); this.resetFails(); }
+  async verify(pin){
+    const c = this.config(); if(!c) return true;
+    return this.equalTime(await this.digest(pin, B64.to(c.salt), c.iterations), c.hash);
+  }
+  /* Comparación sin fugas de tiempo */
+  equalTime(a, b){
+    if(a.length !== b.length) return false;
+    let d = 0; for(let i=0;i<a.length;i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return d === 0;
+  }
+  fails(){ return +(localStorage.getItem(this.kFails) || 0); }
+  addFail(){
+    const n = this.fails() + 1;
+    localStorage.setItem(this.kFails, n); localStorage.setItem(this.kLast, Date.now());
+    return n;
+  }
+  resetFails(){ localStorage.removeItem(this.kFails); localStorage.removeItem(this.kLast); }
+  /* Espera obligatoria tras 3 fallos: 5 s, 15 s, 45 s… hasta 5 min */
+  waitMs(){
+    const n = this.fails(); if(n < 3) return 0;
+    const espera = Math.min(5000 * Math.pow(3, n - 3), 300000);
+    return Math.max(0, espera - (Date.now() - (+localStorage.getItem(this.kLast) || 0)));
+  }
+}
+
+/* ------------------------------------------------------------
+   ImageTools · Fotos de medicamentos
+   Valida el tipo, limita el tamaño y REDIBUJA la imagen en un
+   canvas. El redibujado cumple dos funciones:
+     1. Reduce el peso (clave: no hay base de datos externa).
+     2. Elimina metadatos EXIF/GPS y cualquier carga incrustada
+        en el archivo original.
+   Los SVG se rechazan: pueden contener scripts.
+   ------------------------------------------------------------ */
+class ImageTools{
+  static MAX_INPUT = 8 * 1024 * 1024;  // 8 MB de entrada
+  static MAX_SIDE  = 720;              // lado mayor tras redimensionar
+  static QUALITY   = 0.78;
+  static ALLOWED   = ['image/png','image/jpeg','image/webp','image/gif','image/bmp'];
+
+  static async fromFile(file){
+    if(!file) throw new Error('No se seleccionó ninguna imagen.');
+    if(!this.ALLOWED.includes(file.type))
+      throw new Error('Formato no admitido. Usa JPG, PNG, WEBP, GIF o BMP (los SVG se rechazan por seguridad).');
+    if(file.size > this.MAX_INPUT)
+      throw new Error('La imagen supera los 8 MB. Elige una más ligera.');
+    return this.normalize(await this.decode(file));
+  }
+  static decode(file){
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('El archivo no es una imagen válida.')); };
+      img.src = url;
+    });
+  }
+  static normalize(img){
+    const escala = Math.min(1, this.MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth  * escala));
+    const h = Math.max(1, Math.round(img.naturalHeight * escala));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); // fondo para PNG transparente
+    ctx.drawImage(img, 0, 0, w, h);
+    return { dataUrl:c.toDataURL('image/jpeg', this.QUALITY), width:w, height:h };
+  }
+  static bytes(d){ return d ? Math.round((d.length - d.indexOf(',') - 1) * 3 / 4) : 0; }
+  static kb(d){ return Math.max(1, Math.round(this.bytes(d) / 1024)); }
+}
+
+/* ------------------------------------------------------------
+   StorageManager · Persistencia local y respaldo automático
+   Tres niveles, todos dentro del navegador (sin servidor):
+     1. Estado actual.
+     2. Copia completa del estado inmediatamente anterior.
+     3. Hasta 5 copias diarias ligeras (sin fotos, ~10 % del peso)
+        para poder recuperar el historial si se agota la cuota.
+   ------------------------------------------------------------ */
+class StorageManager{
+  constructor(){
+    this.key  = 'cuida-paliativos-v1';
+    this.prev = 'cuida-copia-previa';
+    this.snapKey = 'cuida-copias';
+    this.maxSnaps = 5;
+  }
+  load(){ try{ return JSON.parse(localStorage.getItem(this.key)); }catch{ return null; } }
+  previous(){ try{ return JSON.parse(localStorage.getItem(this.prev)); }catch{ return null; } }
+  snapshots(){ try{ return JSON.parse(localStorage.getItem(this.snapKey)) || []; }catch{ return []; } }
+
+  save(data){
+    let json;
+    try{ json = JSON.stringify(data); }catch{ return {ok:false, error:'serializar'}; }
+    const anterior = localStorage.getItem(this.key);
+    try{
+      if(anterior) localStorage.setItem(this.prev, anterior);
+      localStorage.setItem(this.key, json);
+      this.snapshot(data);
+      return {ok:true, bytes:json.length};
+    }catch{
+      // Cuota agotada: libera las copias y conserva lo esencial
+      try{
+        localStorage.removeItem(this.snapKey);
+        localStorage.removeItem(this.prev);
+        localStorage.setItem(this.key, json);
+        return {ok:true, bytes:json.length, warning:'copias-liberadas'};
+      }catch{
+        return {ok:false, error:'cuota'};
+      }
+    }
+  }
+  /* Copia diaria: se renueva como mucho una vez por hora */
+  snapshot(data){
+    const hoy = new Date().toISOString().slice(0,10);
+    const list = this.snapshots();
+    const i = list.findIndex(s => s.day === hoy);
+    if(i === 0 && Date.now() - new Date(list[0].at).getTime() < 3600000) return;
+    if(i >= 0) list.splice(i, 1);
+    const ligero = { ...data, medications:(data.medications || []).map(m => ({...m, photo:''})) };
+    list.unshift({ day:hoy, at:new Date().toISOString(), data:JSON.stringify(ligero) });
+    localStorage.setItem(this.snapKey, JSON.stringify(list.slice(0, this.maxSnaps)));
+  }
+  /* Espacio ocupado por la app en este navegador (aprox.) */
+  usedBytes(){
+    let n = 0;
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && k.startsWith('cuida')) n += k.length + (localStorage.getItem(k) || '').length;
+    }
+    return n * 2; // UTF-16
+  }
+}
+
+/* --- Modelos de dominio --- */
+class Patient{
+  constructor(o={}){ Object.assign(this,{name:'María González',age:68,diagnosis:'Cáncer de pulmón · cuidados paliativos'}, o); }
+}
+class Medication{
+  constructor(o={}){ Object.assign(this,{
+    id:uuid(), name:'', activeIngredient:'', dose:'', unit:'mg',
+    presentation:'Comprimido', route:'Oral', times:[], indication:'', notes:'',
+    color:'#3a5bd0', active:true, stock:0, minStock:5, expiry:'', photo:'', lab:'', nationalCode:''
+  }, o); }
+}
+/* Cuidador/a: puede tener asignados VARIOS medicamentos (medIds) */
+class Caregiver{
+  constructor(o={}){ Object.assign(this,{
+    id:uuid(), name:'', role:'Familiar', phone:'', medIds:[], notes:''
+  }, o); if(!Array.isArray(this.medIds)) this.medIds=[]; }
+}
+
+/* --- Utilidades de negocio --- */
+class MedicationSchedule{
+  static today(meds){
+    return meds.filter(m=>m.active)
+      .flatMap(m => m.times.map(time => ({ id:uuid(), medId:m.id, time, status:'pending', actual:'', responsible:'', note:'' })))
+      .sort((a,b)=>a.time.localeCompare(b.time));
+  }
+}
+class Inventory{
+  static days(m){ return m.times.length ? Math.floor(m.stock/m.times.length) : 0; }
+  static level(m){ return m.stock<=m.minStock ? 'low' : 'ok'; }
+}
+
+/* --- Managers de datos --- */
+class SymptomTracker{ add(data,s){ s.symptoms.unshift({...data, id:uuid(), date:new Date().toISOString()}); } }
+class HistoryManager{ add(s,type,text,meta={}){ s.history.unshift({id:uuid(), date:new Date().toISOString(), type, text, ...meta}); } }
+class NotificationManager{
+  notify(text){ if('Notification' in window && Notification.permission==='granted') new Notification('Cuida',{body:text}); }
+}
+
+/* ============================================================
+   UI: Toasts (avisos no bloqueantes con aria-live)
+   ============================================================ */
+function toast(message, type='info', ms=4000){
+  const host = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type==='good' ? ' good' : type==='bad' ? ' bad' : '');
+  el.setAttribute('role', type==='bad' ? 'alert' : 'status');
+  el.textContent = message;
+  host.appendChild(el);
+  setTimeout(()=>el.remove(), ms);
+}
+
+/* ============================================================
+   UI: Modal accesible (aria-modal, foco atrapado, Escape,
+       devuelve el foco al abridor). Reemplaza a los modales
+       antiguos y a prompt()/alert()/confirm().
+   ============================================================ */
+const Modal = {
+  host: null, dialog: null, lastFocus: null, onKey: null,
+  init(){ this.host = document.getElementById('modalHost'); this.dialog = document.getElementById('dialog'); },
+  open(html, {onOpen}={}){
+    this.lastFocus = document.activeElement;
+    this.dialog.innerHTML = html;
+    this.host.hidden = false;
+    // Cerrar al pulsar fondo o cualquier botón [data-close]
+    this.host.onclick = e => { if(e.target === this.host || e.target.closest('[data-close]')) this.close(); };
+    // Gestión de teclado: Escape cierra, Tab queda atrapado dentro
+    this.onKey = e => {
+      if(e.key === 'Escape'){ e.preventDefault(); this.close(); return; }
+      if(e.key === 'Tab') this.trap(e);
+    };
+    document.addEventListener('keydown', this.onKey, true);
+    if(onOpen) onOpen(this.dialog);
+    // Foco inicial: primer campo o botón útil
+    const first = this.dialog.querySelector('input,select,textarea,button:not([data-close])') || this.dialog.querySelector('button');
+    (first || this.dialog).focus();
+  },
+  trap(e){
+    const f = [...this.dialog.querySelectorAll('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+      .filter(el => !el.disabled && el.offsetParent !== null);
+    if(!f.length) return;
+    const first = f[0], last = f[f.length-1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  },
+  close(){
+    this.host.hidden = true;
+    this.dialog.innerHTML = '';
+    document.removeEventListener('keydown', this.onKey, true);
+    if(this.lastFocus && this.lastFocus.focus) this.lastFocus.focus();
+  }
+};
+
+/* Confirmación accesible → Promise<boolean> (reemplaza confirm) */
+function confirmDialog({title='Confirmar', message='', confirmText='Aceptar', cancelText='Cancelar', danger=false}={}){
+  return new Promise(resolve => {
+    Modal.open(`
+      <div class="dialog-inner">
+        <h2 id="dialogTitle">${escapeHtml(title)}</h2>
+        <p>${escapeHtml(message)}</p>
+        <div class="modal-foot">
+          <button class="btn secondary" data-close type="button">${escapeHtml(cancelText)}</button>
+          <button class="btn ${danger?'danger':''}" id="cfmOk" type="button">${escapeHtml(confirmText)}</button>
+        </div>
+      </div>`, { onOpen(){ document.querySelector('#dialog').classList.add('sm'); } });
+    document.querySelector('#dialog').classList.add('sm');
+    const cleanup = v => { Modal.close(); document.querySelector('#dialog')?.classList.remove('sm'); resolve(v); };
+    document.getElementById('cfmOk').onclick = ()=>cleanup(true);
+    Modal.host.addEventListener('click', function h(e){ if(e.target===Modal.host||e.target.closest('[data-close]')){ Modal.host.removeEventListener('click',h); resolve(false); } });
+  });
+}
+
+/* Entrada de un dato accesible → Promise<string|null> (reemplaza prompt).
+   Soporta type (text/time/number/textarea), valor por defecto y validación. */
+function promptDialog({title='', label='', value='', type='text', placeholder='', required=true, validate}={}){
+  return new Promise(resolve => {
+    const field = type==='textarea'
+      ? `<textarea class="input" id="pd" ${required?'required':''} placeholder="${escapeHtml(placeholder)}">${escapeHtml(value)}</textarea>`
+      : `<input class="input" id="pd" type="${type}" value="${escapeHtml(value)}" ${required?'required':''} placeholder="${escapeHtml(placeholder)}">`;
+    Modal.open(`
+      <h2 id="dialogTitle">${escapeHtml(title)}</h2>
+      <form id="pdForm" novalidate>
+        <label for="pd">${escapeHtml(label)}</label>
+        ${field}
+        <p class="err" id="pdErr" role="alert" aria-live="assertive"></p>
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" data-close type="button">Cancelar</button>
+        <button class="btn" id="pdOk" type="submit" form="pdForm">Aceptar</button>
+      </div>`, { onOpen(){ document.querySelector('#dialog').classList.add('sm'); } });
+    const done = v => { document.querySelector('#dialog')?.classList.remove('sm'); Modal.close(); resolve(v); };
+    const submit = e => {
+      e.preventDefault();
+      const el = document.getElementById('pd'), v = el.value.trim(), err = document.getElementById('pdErr');
+      let msg = '';
+      if(required && !v) msg = 'Este campo es obligatorio.';
+      else if(validate) msg = validate(v) || '';
+      if(msg){ el.setAttribute('aria-invalid','true'); err.textContent = msg; el.focus(); return; }
+      done(v);
+    };
+    document.getElementById('pdForm').onsubmit = submit;
+    // Cancelar por fondo/Escape resuelve null
+    Modal.host.addEventListener('click', function h(e){ if(e.target===Modal.host||e.target.closest('[data-close]')){ Modal.host.removeEventListener('click',h); document.querySelector('#dialog')?.classList.remove('sm'); resolve(null); } });
+  });
+}
+
+/* Expresión para validar horas HH:MM (00:00–23:59) */
+const RE_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/* ============================================================
+   Controlador principal
+   ============================================================ */
+class App{
+  constructor(){
+    Modal.init();
+    this.store  = new StorageManager();
+    this.notify = new NotificationManager();
+    this.pin    = new PinLock();
+    this.locked = false;
+    this.state  = this.store.load() || this.seed();
+    this.migrate();
+    this.page = 'dashboard';
+    this.save();
+    this.buildNav();
+    this.render();
+    // Reloj + refresco del panel cada 30 s
+    setInterval(()=>{ this.updateClock(); this.renderIfDashboard(); }, 30000);
+    this.updateClock();
+    // Importación de respaldo
+    document.getElementById('importFile').onchange = e => this.handleImport(e);
+    this.initLock();
+    this.backupReminder();
+  }
+
+  /* Compatibilidad con datos y respaldos de versiones anteriores */
+  migrate(){
+    this.state.patient    = new Patient(this.state.patient);
+    this.state.caregivers = (this.state.caregivers || []).map(c => new Caregiver(c));
+    this.state.medications = (this.state.medications || []).map(m => new Medication(m));
+    this.state.symptoms = this.state.symptoms || [];
+    this.state.rescues  = this.state.rescues  || [];
+    this.state.history  = this.state.history  || [];
+    this.state.agenda   = this.state.agenda   || [];
+    this.state.settings = Object.assign(
+      { dark:false, large:false, high:false, sound:false, notifications:false,
+        autolock:5, medView:'tabla', lastBackup:'' },
+      this.state.settings || {});
+  }
+
+  /* ============================================================
+     BLOQUEO DE PANTALLA
+     Protege el acceso visual a la información en el dispositivo.
+     No cifra lo guardado: para llevarse los datos fuera del equipo
+     se usa el respaldo cifrado (ver exportBackup).
+     ============================================================ */
+  initLock(){
+    this.lockEl = document.getElementById('lock');
+    document.getElementById('lockForm').onsubmit = e => { e.preventDefault(); this.tryUnlock(); };
+    this.lockEl.querySelector('[data-forgot]').onclick = () => this.forgotPin();
+    // Actividad del usuario para el autobloqueo
+    ['pointerdown','keydown','touchstart','wheel'].forEach(ev =>
+      document.addEventListener(ev, () => this.touch(), {passive:true}));
+    setInterval(() => this.checkIdle(), 15000);
+    this.touch();
+    if(this.pin.enabled()) this.lock(true);
+  }
+  touch(){ this.lastActivity = Date.now(); }
+  checkIdle(){
+    const min = +this.state.settings.autolock || 0;
+    if(!min || this.locked || !this.pin.enabled()) return;
+    if(Date.now() - this.lastActivity > min * 60000){
+      this.lock();
+      toast('Bloqueada por inactividad.');
+    }
+  }
+  lock(silencioso){
+    if(!this.pin.enabled()) return;
+    this.locked = true;
+    document.body.classList.add('locked');
+    this.lockEl.hidden = false;
+    this.renderLockBox();
+    if(!silencioso) this.announce('Aplicación bloqueada.');
+  }
+  renderLockBox(){
+    const err = document.getElementById('lockErr'), inp = document.getElementById('lockPin');
+    if(err) err.textContent = '';
+    if(inp){ inp.value = ''; setTimeout(() => inp.focus(), 60); }
+  }
+  unlock(){
+    this.locked = false;
+    document.body.classList.remove('locked');
+    this.lockEl.hidden = true;
+    this.touch();
+    this.render();
+  }
+  async tryUnlock(){
+    const inp = document.getElementById('lockPin'),
+          err = document.getElementById('lockErr'),
+          btn = document.getElementById('lockBtn');
+    const espera = this.pin.waitMs();
+    if(espera > 0){ err.textContent = `Demasiados intentos. Espera ${Math.ceil(espera/1000)} s.`; return; }
+    if(!inp.value){ err.textContent = 'Introduce el PIN.'; return; }
+    btn.disabled = true;
+    const ok = await this.pin.verify(inp.value);
+    btn.disabled = false;
+    if(ok){ this.pin.resetFails(); this.unlock(); toast('Sesión desbloqueada.', 'good'); return; }
+    const n = this.pin.addFail();
+    inp.value = ''; inp.focus();
+    err.textContent = n >= 3
+      ? `PIN incorrecto. Espera ${Math.ceil(this.pin.waitMs()/1000)} s antes de reintentar.`
+      : `PIN incorrecto. Intento ${n} de 3.`;
+  }
+  /* PIN olvidado: como no se guarda, no hay forma de recuperarlo.
+     La única salida honesta es restaurar un respaldo tras borrar. */
+  forgotPin(){
+    const box = this.lockEl.querySelector('.lock-box');
+    box.innerHTML = `
+      <div class="lock-logo" aria-hidden="true">!</div>
+      <h1 id="lockTitle">PIN olvidado</h1>
+      <p class="muted">El PIN no se guarda en ningún sitio, solo una huella criptográfica,
+        así que no puede recuperarse ni mostrarse.</p>
+      <p class="muted">Puedes borrar los datos de este navegador y volver a empezar.
+        Si tienes un respaldo, podrás restaurarlo después.</p>
+      <form id="wipeForm" novalidate>
+        <label for="wipeWord">Escribe <b>BORRAR</b> para confirmar</label>
+        <input class="input" id="wipeWord" autocomplete="off" placeholder="BORRAR">
+        <p class="err" id="wipeErr" role="alert"></p>
+        <div class="lock-foot">
+          <button class="btn danger" type="submit">Borrar datos de este navegador</button>
+          <button class="btn secondary" type="button" id="wipeBack">Volver al PIN</button>
+        </div>
+      </form>`;
+    document.getElementById('wipeBack').onclick = () => location.reload();
+    document.getElementById('wipeForm').onsubmit = e => {
+      e.preventDefault();
+      if(document.getElementById('wipeWord').value.trim().toUpperCase() !== 'BORRAR'){
+        document.getElementById('wipeErr').textContent = 'Escribe BORRAR exactamente para confirmar.';
+        return;
+      }
+      for(let i = localStorage.length - 1; i >= 0; i--){
+        const k = localStorage.key(i);
+        if(k && k.startsWith('cuida')) localStorage.removeItem(k);
+      }
+      location.reload();
+    };
+    setTimeout(() => document.getElementById('wipeWord').focus(), 60);
+  }
+
+  /* Recordatorio: sin servidor, el respaldo manual es la única red de seguridad */
+  backupReminder(){
+    const last = this.state.settings.lastBackup;
+    const dias = last ? (Date.now() - new Date(last).getTime()) / 864e5 : Infinity;
+    if(dias > 7) setTimeout(() => toast(
+      last ? `Han pasado ${Math.floor(dias)} días desde el último respaldo. Descarga uno desde Ajustes.`
+           : 'Aún no has descargado ningún respaldo. Hazlo desde Ajustes para no perder la información.',
+      'bad', 9000), 1500);
+  }
+
+  /* Datos de ejemplo iniciales */
+  seed(){
+    const svg = (bg,label) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" rx="18" fill="${bg}"/><rect x="42" y="28" width="96" height="124" rx="12" fill="white"/><path d="M62 60h56M62 78h40" stroke="${bg}" stroke-width="7" stroke-linecap="round"/><text x="90" y="120" text-anchor="middle" font-family="Arial" font-size="15" fill="${bg}">${label}</text></svg>`);
+    const meds = [
+      new Medication({name:'Morfina', activeIngredient:'Sulfato de morfina', dose:'10', unit:'mg', presentation:'Solución oral', route:'Oral', times:['08:00','14:00','20:00'], indication:'Dolor intenso', notes:'Administrar con jeringa dosificadora.', color:'#805ad5', stock:28, minStock:10, expiry:'2027-05-30', lab:'Ejemplo Farma', photo:svg('#805ad5','MORFINA')}),
+      new Medication({name:'Paracetamol', activeIngredient:'Paracetamol', dose:'1', unit:'g', presentation:'Comprimido', route:'Oral', times:['09:00','21:00'], indication:'Dolor o fiebre', color:'#92500a', stock:8, minStock:10, expiry:'2026-10-12', lab:'Ejemplo Farma', photo:svg('#c2740f','PARACETAMOL')}),
+      new Medication({name:'Ondansetrón', activeIngredient:'Ondansetrón', dose:'4', unit:'mg', presentation:'Comprimido', route:'Oral', times:['08:00','20:00'], indication:'Náuseas y vómitos', color:'#0f6f52', stock:16, minStock:6, expiry:'2027-01-08', lab:'Ejemplo Farma', photo:svg('#0f6f52','ONDANSETRÓN')})
+    ];
+    // Cuidadores de ejemplo, cada uno con VARIOS medicamentos asignados
+    const caregivers = [
+      new Caregiver({name:'Ana Rodríguez', role:'Familiar', phone:'300 123 4567', medIds:meds.map(m=>m.id), notes:'Cuidadora principal · turno de día.'}),
+      new Caregiver({name:'Enfermería domiciliaria', role:'Enfermero/a', phone:'', medIds:[meds[0].id, meds[2].id], notes:'Control de morfina y antieméticos.'})
+    ];
+    return { patient:new Patient(), medications:meds, agenda:MedicationSchedule.today(meds),
+             caregivers, symptoms:[], rescues:[], history:[],
+             settings:{dark:false, large:false, high:false, sound:false, notifications:false} };
+  }
+
+  /* Guarda avisando si el navegador se queda sin espacio (las fotos
+     son lo que más pesa cuando no hay base de datos externa). */
+  save(){
+    const r = this.store.save(this.state);
+    if(!r.ok)
+      toast('No se pudo guardar: el almacenamiento del navegador está lleno. Descarga un respaldo y elimina fotos que no uses.', 'bad', 10000);
+    else if(r.warning === 'copias-liberadas')
+      toast('Queda poco espacio: se liberaron las copias locales para poder guardar.', 'bad', 8000);
+    return r;
+  }
+  applySettings(){
+    const s = this.state.settings;
+    document.body.classList.toggle('dark', s.dark);
+    document.body.classList.toggle('large', s.large);
+    document.body.classList.toggle('high', s.high);
+  }
+
+  /* --- Navegación (enlaces con aria-current, iconos SVG) --- */
+  buildNav(){
+    const S = p => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+    const icons = {
+      dashboard:S('<path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/>'),
+      medications:S('<path d="M10.5 3.5 3.5 10.5a5 5 0 0 0 7 7l7-7a5 5 0 0 0-7-7Z"/><path d="M7 7l7 7"/>'),
+      symptoms:S('<path d="M12 20.5S3.5 15.5 3.5 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.5 2.3C20.5 15.5 12 20.5 12 20.5Z"/>'),
+      caregivers:S('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.3a3.2 3.2 0 0 1 0 6.1"/><path d="M17.5 14.6a5.5 5.5 0 0 1 3.2 5.4"/>'),
+      settings:S('<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .3 1.9 2 2 0 1 1-2.8 2.8 1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2 2 2 0 1 1-2.8-2.8 1.7 1.7 0 0 0-1.2-2.9 2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9A2 2 0 1 1 7.3 3.9 1.7 1.7 0 0 0 10.2 2.7a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2 2 2 0 1 1 2.8 2.8 1.7 1.7 0 0 0 1.2 2.9 2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.7 1.7Z"/>')
+    };
+    const items = [['dashboard','Hoy'],['medications','Tratamiento'],['symptoms','Registro'],['caregivers','Cuidadores'],['settings','Ajustes']];
+    this.navItems = items;
+    const nav = document.getElementById('nav');
+    nav.innerHTML = items.map(([id,label]) =>
+      `<a href="#${id}" data-page="${id}"><span class="ic" aria-hidden="true">${icons[id]}</span><span>${label}</span></a>`).join('');
+    nav.onclick = e => { const a = e.target.closest('a'); if(a){ e.preventDefault(); this.go(a.dataset.page); } };
+  }
+  go(page){ this.page = page; this.render(); this.announce('Sección: ' + this.pageLabel(page)); }
+  pageLabel(p){ return (this.navItems.find(i=>i[0]===p)||['',''])[1]; }
+  markActive(){
+    document.querySelectorAll('#nav a').forEach(a =>
+      a.dataset.page===this.page ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'));
+  }
+  announce(msg){ const l=document.getElementById('live'); l.textContent=''; setTimeout(()=>l.textContent=msg, 30); }
+
+  /* --- Render principal --- */
+  render(){
+    this.applySettings();
+    const html = {
+      dashboard:this.homeHTML(), medications:this.treatmentHTML(),
+      symptoms:this.recordHTML(), caregivers:this.caregiversHTML(), settings:this.settingsHTML()
+    }[this.page];
+    const main = document.getElementById('main');
+    main.innerHTML = `<div class="page">${html}</div>`;
+    this.markActive();
+    this.bind();
+    // Botón de bloqueo rápido: solo si hay PIN configurado
+    const tl = document.getElementById('topLock');
+    if(tl){ tl.hidden = !this.pin.enabled(); tl.onclick = () => this.lock(); }
+    main.focus({preventScroll:true});
+  }
+  renderIfDashboard(){ if(this.page==='dashboard') this.render(); }
+
+  updateClock(){
+    const c = document.getElementById('clock');
+    if(c) c.textContent = new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+  }
+
+  /* --- Fragmentos reutilizables --- */
+  title(t, sub, button=''){ return `<div class="title-row"><div><h1>${escapeHtml(t)}</h1><p class="sub">${escapeHtml(sub)}</p></div>${button}</div>`; }
+  section(title, content, action=''){ return `<div class="section-head"><h2>${escapeHtml(title)}</h2>${action}</div>${content}`; }
+  med(id){ return this.state.medications.find(m=>m.id===id); }
+  caregiver(id){ return this.state.caregivers.find(c=>c.id===id); }
+  caregiversFor(medId){ return this.state.caregivers.filter(c=>c.medIds.includes(medId)); }
+  initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase(); }
+
+  todayDone(){ return this.state.agenda.filter(a=>a.status==='administered').length; }
+  pending(){ return this.state.agenda.filter(a=>a.status==='pending').length; }
+  next(){
+    const now = new Date().toTimeString().slice(0,5);
+    return this.state.agenda.find(a=>a.status==='pending' && a.time>=now)
+        || this.state.agenda.find(a=>a.status==='pending');
+  }
+
+  /* --- Vistas --- */
+  homeHTML(){ return this.dashboardHTML() + this.section('Agenda de hoy', this.agendaHTML(false),
+    '<button class="btn secondary small" type="button" data-action="resetAgenda">Recrear agenda</button>'); }
+  treatmentHTML(){ return this.medsHTML() + this.section('Inventario', this.inventoryHTML()); }
+  recordHTML(){ return this.symptomsHTML() + this.section('Historial reciente', this.historyHTML(),
+    '<button class="btn secondary small" type="button" data-action="exportCSV">Exportar CSV</button>'); }
+
+  dashboardHTML(){
+    const n = this.next(), m = n && this.med(n.medId);
+    const total = this.state.agenda.length, done = this.todayDone();
+    const alerts = this.state.medications.filter(x => Inventory.level(x)==='low' ||
+      (x.expiry && new Date(x.expiry) < new Date(Date.now()+90*864e5)));
+    const symToday = this.state.symptoms.filter(x => x.date.slice(0,10)===new Date().toISOString().slice(0,10)).length;
+    const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
+    return this.title('Buenos días, ' + this.state.patient.name.split(' ')[0], this.state.patient.diagnosis) + `
+      <div class="grid stats">
+        <div class="card stat"><span class="icon" aria-hidden="true">◷</span><div class="label">Pendientes hoy</div><div class="n">${this.pending()}</div></div>
+        <div class="card stat"><span class="icon" aria-hidden="true">✓</span><div class="label">Administrados</div><div class="n">${done}</div></div>
+        <div class="card stat"><span class="icon" aria-hidden="true">!</span><div class="label">Alertas</div><div class="n">${alerts.length}</div></div>
+        <div class="card stat"><span class="icon" aria-hidden="true">♡</span><div class="label">Síntomas hoy</div><div class="n">${symToday}</div></div>
+      </div>
+      <div class="grid two" style="margin-top:18px">
+        <div class="card">
+          <b>Próxima medicación</b>
+          ${m ? `<div class="hero" style="margin-top:14px">
+                   <img class="hero-photo" src="${safeImage(m.photo)}" alt="Foto de ${escapeHtml(m.name)}"
+                        data-action="viewPhoto" data-id="${m.id}" tabindex="0" role="button">
+                   <div>
+                     <div class="hero-name">${escapeHtml(m.name)}</div>
+                     <p class="muted" style="margin:4px 0 8px">${escapeHtml(m.dose)} ${escapeHtml(m.unit)} · ${escapeHtml(m.presentation)} · ${escapeHtml(m.route)}</p>
+                     <p style="margin:0 0 10px"><span class="pill warn">Pendiente · ${escapeHtml(n.time)}</span></p>
+                     ${m.indication ? `<p class="muted" style="margin:0 0 12px">${escapeHtml(m.indication)}</p>` : ''}
+                     <div class="actions">
+                       <button class="btn" type="button" data-action="admin" data-id="${n.id}">Administrar</button>
+                       <button class="btn secondary" type="button" data-action="viewMed" data-id="${m.id}">Ver ficha</button>
+                     </div>
+                   </div>
+                 </div>`
+                 : '<div class="empty">No hay medicación pendiente.</div>'}
+        </div>
+        <div class="card">
+          <b>Progreso del día</b>
+          <div class="n" style="font-size:1.5rem">${done} de ${total}</div>
+          <div class="progress"><i style="width:${total ? done/total*100 : 0}%"></i></div>
+          <p class="muted">${this.pending()} dosis aún por registrar</p>
+        </div>
+        <div class="card">
+          <b>Alertas de inventario</b>
+          ${alerts.length ? alerts.map(x => `<div class="alert ${Inventory.level(x)==='low'?'bad':''}"><b>${escapeHtml(x.name)}</b><br><small>${Inventory.level(x)==='low' ? `Stock bajo: quedan ${x.stock}` : `Vencimiento próximo: ${escapeHtml(x.expiry)}`}</small></div>`).join('')
+                          : '<div class="notice">Todo el inventario está en orden.</div>'}
+        </div>
+        <div class="card">
+          <b>Información del paciente</b>
+          <ul class="list">
+            <li><span>Edad</span><b>${escapeHtml(this.state.patient.age)} años</b></li>
+            <li><span>Diagnóstico</span><b>${escapeHtml(this.state.patient.diagnosis)}</b></li>
+            <li><span>Fecha</span><b>${fecha}</b></li>
+          </ul>
+        </div>
+        <div class="card">
+          <b>Equipo de cuidado</b>
+          ${this.state.caregivers.length
+            ? `<ul class="list">${this.state.caregivers.slice(0,4).map(c=>`<li><span class="car-line"><span class="avatar sm" aria-hidden="true">${escapeHtml(this.initials(c.name))}</span> ${escapeHtml(c.name)}</span><span class="pill">${c.medIds.length} med.</span></li>`).join('')}</ul>`
+            : '<div class="empty">Sin cuidadores. Añádelos en la sección Cuidadores.</div>'}
+        </div>
+      </div>`;
+  }
+
+  agendaHTML(header=true){
+    const rows = this.state.agenda.map(a => {
+      const m = this.med(a.medId);
+      const st = {pending:'Pendiente', administered:'Administrado', skipped:'Omitido', postponed:'Pospuesto'}[a.status];
+      return `<div class="card agenda-card">
+        <div class="time">${escapeHtml(a.time)}</div>
+        <img class="med-icon" src="${safeImage(m.photo)}" alt="">
+        <div>
+          <b>${escapeHtml(m.name)}</b>
+          <div class="muted">${escapeHtml(m.dose)} ${escapeHtml(m.unit)} · ${escapeHtml(m.route)}</div>
+          <div class="status"><span class="pill ${a.status==='pending'?'warn':''}">${st}</span>${a.actual?` · Real: ${new Date(a.actual).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})} · ${escapeHtml(a.responsible)}`:''}<br>${escapeHtml(m.notes||m.indication)}</div>
+        </div>
+        <div class="actions">${a.status==='pending'
+          ? `<button class="btn small" type="button" data-action="admin" data-id="${a.id}">Administrar</button>
+             <button class="btn secondary small" type="button" data-action="postpone" data-id="${a.id}">Posponer</button>
+             <button class="btn danger small" type="button" data-action="skip" data-id="${a.id}">Omitir</button>`
+          : `<button class="btn secondary small" type="button" data-action="undo" data-id="${a.id}">Deshacer</button>`}</div>
+      </div>`;
+    }).join('');
+    const head = header ? this.title('Agenda diaria',
+      'Dosis programadas para ' + new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'}),
+      '<button class="btn secondary" type="button" data-action="resetAgenda">Recrear agenda</button>') : '';
+    return head + `<div class="agenda">${rows || '<div class="card empty">Aún no hay medicamentos programados.</div>'}</div>`;
+  }
+
+  medsHTML(){
+    const rows = this.state.medications.map(m => `<tr>
+      <td data-label="Medicamento"><div class="med-row"><img class="thumb" src="${safeImage(m.photo)}" alt=""><div><b>${escapeHtml(m.name)}</b><br><small class="muted">${escapeHtml(m.activeIngredient||'Sin principio activo')}</small>${this.caregiversFor(m.id).length?`<div class="chips mini">${this.caregiversFor(m.id).map(c=>`<span class="chip">${escapeHtml(c.name)}</span>`).join('')}</div>`:''}</div></div></td>
+      <td data-label="Dosis">${escapeHtml(m.dose)} ${escapeHtml(m.unit)}</td>
+      <td data-label="Horarios">${m.times.map(escapeHtml).join(', ')||'—'}</td>
+      <td data-label="Inventario">${m.stock} <small class="muted">(${Inventory.days(m)} días)</small></td>
+      <td data-label="Estado"><span class="pill ${Inventory.level(m)==='low'?'bad':''}">${m.active?'Activo':'Inactivo'}</span></td>
+      <td data-label="Acción"><div class="actions"><button class="btn secondary small" type="button" data-action="viewMed" data-id="${m.id}">Ver</button><button class="btn secondary small" type="button" data-action="editMed" data-id="${m.id}">Editar</button></div></td>
+    </tr>`).join('');
+
+    const galeria = this.state.medications.map(m => {
+      const cuidadores = this.caregiversFor(m.id);
+      return `<div class="card gcard hover">
+        <img src="${safeImage(m.photo)}" alt="Foto de ${escapeHtml(m.name)}"
+             data-action="viewPhoto" data-id="${m.id}" tabindex="0" role="button">
+        <div class="gbody">
+          <div>
+            <b>${escapeHtml(m.name)}</b>
+            <div class="muted">${escapeHtml(m.dose)} ${escapeHtml(m.unit)} · ${escapeHtml(m.presentation)}</div>
+          </div>
+          <div>
+            <span class="pill ${Inventory.level(m)==='low'?'bad':''}">${Inventory.level(m)==='low'?'Stock bajo':'Stock correcto'}</span>
+            <span class="pill">${m.times.length||0}/día</span>
+          </div>
+          ${cuidadores.length ? `<div class="chips mini">${cuidadores.map(c=>`<span class="chip">${escapeHtml(c.name)}</span>`).join('')}</div>` : ''}
+          <div class="actions">
+            <button class="btn secondary small" type="button" data-action="viewMed" data-id="${m.id}">Ver ficha</button>
+            <button class="btn secondary small" type="button" data-action="editMed" data-id="${m.id}">Editar</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const esGaleria = this.state.settings.medView === 'galeria';
+    const vista = esGaleria
+      ? `<div class="grid gallery" id="medRows">${galeria || '<div class="card empty">Aún no hay medicamentos.</div>'}</div>`
+      : `<div class="card table-wrap"><table class="table">
+          <caption class="sr-only">Lista de medicamentos</caption>
+          <thead><tr><th>Medicamento</th><th>Dosis</th><th>Horarios</th><th>Inventario</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+          <tbody id="medRows">${rows}</tbody>
+        </table></div>`;
+
+    return this.title('Tratamiento', 'Medicamentos, horarios e inventario en un solo lugar.',
+      '<button class="btn" type="button" data-action="newMed">+ Nuevo medicamento</button>') + `
+      <div class="toolbar">
+        <label class="sr-only" for="medSearch">Buscar medicamento</label>
+        <input class="input search" id="medSearch" type="search" placeholder="Buscar medicamento o principio activo">
+        <div class="seg" role="group" aria-label="Forma de ver los medicamentos">
+          <button type="button" data-action="viewMode" data-id="tabla"   aria-pressed="${!esGaleria}">Tabla</button>
+          <button type="button" data-action="viewMode" data-id="galeria" aria-pressed="${esGaleria}">Galería</button>
+        </div>
+      </div>
+      ${vista}`;
+  }
+
+  inventoryHTML(){
+    const rows = this.state.medications.map(m => `<tr>
+      <td data-label="Medicamento"><div class="med-row"><img class="thumb" src="${safeImage(m.photo)}" alt=""><b>${escapeHtml(m.name)}</b></div></td>
+      <td data-label="Restante"><b>${m.stock}</b> unidades</td>
+      <td data-label="Consumo">${m.times.length||0}/día</td>
+      <td data-label="Días">${Inventory.days(m)} días</td>
+      <td data-label="Vencimiento">${escapeHtml(m.expiry)||'—'}</td>
+      <td data-label="Alerta">${Inventory.level(m)==='low' ? '<span class="pill bad">Stock bajo</span>' : '<span class="pill">Correcto</span>'}</td>
+      <td data-label="Acción"><button class="btn secondary small" type="button" data-action="stock" data-id="${m.id}">Ajustar</button></td>
+    </tr>`).join('');
+    return `<div class="card table-wrap"><table class="table">
+      <caption class="sr-only">Inventario de medicamentos</caption>
+      <thead><tr><th>Medicamento</th><th>Restante</th><th>Consumo</th><th>Días</th><th>Vencimiento</th><th>Alerta</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+  }
+
+  symptomsHTML(){
+    const rows = this.state.symptoms.slice(0,10).map(s =>
+      `<li><div><b>${new Date(s.date).toLocaleString('es-CO')}</b><br><span class="muted">Dolor ${escapeHtml(s.pain)}/10 · T° ${escapeHtml(s.temp)||'—'} °C · ${escapeHtml(s.notes)||'Sin observaciones'}</span></div><span class="pill ${+s.pain>=7?'bad':''}">${+s.pain>=7?'Atención':'Registrado'}</span></li>`
+    ).join('') || '<li class="empty">Aún no se han registrado síntomas.</li>';
+    const rescue = this.state.rescues.slice(0,4).map(x =>
+      `<li><div><b>${escapeHtml(x.medication)}</b> · ${escapeHtml(x.amount)}<br><span class="muted">${escapeHtml(x.reason)} — ${escapeHtml(x.result)||'sin resultado'}</span></div><small>${new Date(x.date).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</small></li>`
+    ).join('') || '<li class="empty">Sin dosis de rescate.</li>';
+    const buttons = `<div class="actions">
+      <button class="btn secondary" type="button" data-action="rescue">+ Dosis de rescate</button>
+      <button class="btn" type="button" data-action="symptom">+ Registrar síntomas</button></div>`;
+    return this.title('Registro clínico', 'Síntomas, rescates e historial en un solo lugar.', buttons) + `
+      <div class="grid two">
+        <div class="card"><b>Registros recientes</b><ul class="list">${rows}</ul></div>
+        <div class="card"><b>Medicación de rescate</b><ul class="list">${rescue}</ul></div>
+      </div>`;
+  }
+
+  historyHTML(){
+    const merged = this.state.history.concat(
+      this.state.agenda.filter(a=>a.status!=='pending').map(a => ({
+        date:a.actual||new Date().toISOString(),
+        text:`${this.med(a.medId).name}: ${a.status==='administered'?'administrado':'omitido/pospuesto'}`,
+        type:'agenda'
+      }))
+    ).sort((a,b)=>b.date.localeCompare(a.date));
+    const rows = merged.map(x =>
+      `<li><div><b>${escapeHtml(x.text)}</b><br><small class="muted">${new Date(x.date).toLocaleString('es-CO')}</small></div><span class="pill">${escapeHtml(x.type)}</span></li>`
+    ).join('') || '<li class="empty">No hay eventos aún.</li>';
+    return `<div class="toolbar"><label class="sr-only" for="historySearch">Buscar en historial</label>
+        <input class="input search" id="historySearch" type="search" placeholder="Buscar en historial"></div>
+      <div class="card"><ul class="list" id="historyRows">${rows}</ul></div>`;
+  }
+
+  /* --- Vista de cuidadores (cada uno con varios medicamentos) --- */
+  caregiversHTML(){
+    const medChip = m => `<span class="chip"><span class="dot" style="background:${escapeHtml(m.color||'#3a5bd0')}"></span>${escapeHtml(m.name)}</span>`;
+    const cards = this.state.caregivers.map(c => {
+      const meds = c.medIds.map(id=>this.med(id)).filter(Boolean);
+      return `<div class="card car-card hover">
+        <div class="car-head">
+          <span class="avatar" aria-hidden="true">${escapeHtml(this.initials(c.name))}</span>
+          <div>
+            <b>${escapeHtml(c.name)}</b>
+            <div class="muted">${escapeHtml(c.role)}${c.phone?' · '+escapeHtml(c.phone):''}</div>
+          </div>
+          <span class="pill" style="margin-left:auto">${meds.length} med.</span>
+        </div>
+        <div class="car-meds">
+          <span class="muted" style="font-size:.8rem">Medicamentos a cargo</span>
+          <div class="chips">${meds.length ? meds.map(medChip).join('') : '<span class="muted">Ninguno asignado</span>'}</div>
+        </div>
+        ${c.notes ? `<p class="muted" style="margin:12px 0 0">${escapeHtml(c.notes)}</p>` : ''}
+        <div class="actions" style="margin-top:14px">
+          <button class="btn secondary small" type="button" data-action="editCaregiver" data-id="${c.id}">Editar</button>
+          <button class="btn danger small" type="button" data-action="delCaregiver" data-id="${c.id}">Eliminar</button>
+        </div>
+      </div>`;
+    }).join('');
+    return this.title('Cuidadores', 'Asigna varios medicamentos a cada cuidador responsable.',
+      '<button class="btn" type="button" data-action="newCaregiver">+ Nuevo cuidador</button>') +
+      `<div class="grid cargrid">${cards || '<div class="card empty">Aún no hay cuidadores. Añade el primero para asignarle medicamentos.</div>'}</div>`;
+  }
+
+  settingsHTML(){
+    const s = this.state.settings, p = this.state.patient;
+    const toggles = [['dark','Modo oscuro'],['large','Fuente y botones grandes'],['high','Alto contraste'],['sound','Sonido al llegar la hora'],['notifications','Notificaciones del navegador']];
+    return this.title('Configuración', 'Preferencias, paciente y respaldo.') + `
+      <div class="settings grid">
+        <div class="card">
+          <b>Paciente</b>
+          <form id="patientForm" class="form" style="margin-top:14px">
+            <label>Nombre<input class="input" id="pName" name="name" autocomplete="name" value="${escapeHtml(p.name)}"></label>
+            <label>Edad<input class="input" id="pAge" name="age" type="number" min="0" max="120" inputmode="numeric" value="${escapeHtml(p.age)}"></label>
+            <label class="full">Diagnóstico<input class="input" id="pDiagnosis" name="diagnosis" value="${escapeHtml(p.diagnosis)}"></label>
+            <div class="modal-foot full"><button class="btn" type="submit">Guardar paciente</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <b>Accesibilidad y avisos</b>
+          ${toggles.map(([k,label]) => `<label class="switch"><span>${label}</span><input type="checkbox" data-setting="${k}" ${s[k]?'checked':''}></label>`).join('')}
+        </div>
+        ${this.securityHTML()}
+        ${this.backupHTML()}
+      </div>`;
+  }
+
+  /* --- Ajustes · Seguridad ---------------------------------- */
+  securityHTML(){
+    const activo = this.pin.enabled();
+    const min = +this.state.settings.autolock || 0;
+    const opciones = [[0,'Nunca'],[1,'1 minuto'],[5,'5 minutos'],[15,'15 minutos'],[30,'30 minutos']];
+    return `
+      <div class="card">
+        <b>Seguridad</b>
+        <div class="sec-state">
+          <span class="dot-state ${activo?'on':''}" aria-hidden="true"></span>
+          <span>${activo ? 'Bloqueo con PIN activado' : 'Bloqueo con PIN desactivado'}</span>
+        </div>
+        <p class="muted">El PIN protege el acceso a la información en este dispositivo.
+          No se guarda en ningún sitio: solo una huella PBKDF2-SHA256 con sal, imposible de revertir.</p>
+        ${SECURE ? '' : `<div class="alert bad"><b>Funciones de seguridad no disponibles</b><br>
+          <small>Has abierto el archivo directamente (file://). El PIN y el respaldo cifrado necesitan
+          https:// o localhost. Publica el sitio en GitHub Pages o ábrelo con un servidor local.</small></div>`}
+        <div class="actions" style="margin-top:12px">
+          ${activo
+            ? `<button class="btn secondary" type="button" data-action="changePin" ${SECURE?'':'disabled'}>Cambiar PIN</button>
+               <button class="btn secondary" type="button" data-action="lockNow">Bloquear ahora</button>
+               <button class="btn danger" type="button" data-action="removePin">Quitar PIN</button>`
+            : `<button class="btn" type="button" data-action="setPin" ${SECURE?'':'disabled'}>Activar bloqueo con PIN</button>`}
+        </div>
+        <label class="switch" style="margin-top:14px">
+          <span>Bloquear tras inactividad</span>
+          <select class="input" id="autolock" style="max-width:170px" ${activo?'':'disabled'}>
+            ${opciones.map(([v,t]) => `<option value="${v}" ${min===v?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </label>
+        <p class="muted" style="font-size:.82rem;margin-top:12px">
+          Qué protege y qué no: el PIN impide que alguien con acceso al equipo vea la información desde la app,
+          y el respaldo sale siempre cifrado. Los datos guardados en el navegador quedan sin cifrar,
+          así que en un equipo compartido conviene usar además el bloqueo de sesión del sistema operativo.</p>
+      </div>`;
+  }
+
+  /* --- Ajustes · Datos y respaldo --------------------------- */
+  backupHTML(){
+    const usado = this.store.usedBytes();
+    const pct = Math.min(100, Math.round(usado / (5 * 1024 * 1024) * 100));
+    const fotos = this.state.medications.reduce((n,m) => n + ImageTools.bytes(m.photo), 0);
+    const copias = this.store.snapshots();
+    const last = this.state.settings.lastBackup;
+    return `
+      <div class="card">
+        <b>Datos y respaldo</b>
+        <p class="muted">Todo se guarda en este navegador; no hay servidor ni base de datos externa.
+          El archivo de respaldo sale siempre cifrado con la contraseña que elijas.</p>
+
+        <ul class="list" style="margin-top:8px">
+          <li><span>Espacio ocupado</span><b>${this.formatBytes(usado)} <small class="muted">(~${pct} % del límite)</small></b></li>
+          <li><span>De ello, fotos</span><b>${this.formatBytes(fotos)}</b></li>
+          <li><span>Último respaldo descargado</span><b>${last ? new Date(last).toLocaleString('es-CO') : 'Nunca'}</b></li>
+        </ul>
+        <div class="meter ${pct<60?'ok':pct<85?'mid':''}" aria-hidden="true"><i style="width:${pct}%"></i></div>
+
+        <div class="actions" style="margin-top:16px">
+          <button class="btn" type="button" data-action="exportJSON" ${SECURE?'':'disabled'}>Descargar respaldo cifrado</button>
+          <button class="btn secondary" type="button" data-action="import">Restaurar respaldo</button>
+          <button class="btn danger" type="button" data-action="reset">Restablecer datos de ejemplo</button>
+        </div>
+
+        <div style="margin-top:20px">
+          <b>Copias automáticas en este navegador</b>
+          <p class="muted" style="font-size:.84rem">Copia del estado anterior y hasta 5 copias diarias.
+            Las diarias se guardan sin fotos para ocupar poco espacio.</p>
+          <ul class="list">
+            ${this.store.previous() ? `<li><span>Estado anterior <small class="muted">(completo, con fotos)</small></span>
+              <button class="btn secondary small" type="button" data-action="restorePrev">Restaurar</button></li>` : ''}
+            ${copias.length ? copias.map((c,i) => `<li>
+                <span>${new Date(c.at).toLocaleString('es-CO')} <small class="muted">(${this.formatBytes(c.data.length*2)}, sin fotos)</small></span>
+                <button class="btn secondary small" type="button" data-action="restoreSnap" data-id="${i}">Restaurar</button></li>`).join('')
+              : '<li class="empty">Aún no hay copias diarias.</li>'}
+          </ul>
+        </div>
+      </div>`;
+  }
+
+  formatBytes(n){
+    if(n < 1024) return n + ' B';
+    if(n < 1024*1024) return (n/1024).toFixed(0) + ' KB';
+    return (n/1024/1024).toFixed(2) + ' MB';
+  }
+
+  /* --- Enlazado de eventos tras cada render --- */
+  bind(){
+    const main = document.getElementById('main');
+    main.onclick = e => this.action(e);
+
+    // Buscadores en vivo
+    const filter = (input, selector) => {
+      if(!input) return;
+      input.oninput = () => {
+        const q = input.value.toLowerCase();
+        document.querySelectorAll(selector).forEach(r => r.style.display = r.innerText.toLowerCase().includes(q) ? '' : 'none');
+      };
+    };
+    filter(document.getElementById('medSearch'), '#medRows > *');
+    filter(document.getElementById('historySearch'), '#historyRows li');
+
+    // Formulario del paciente (submit accesible en vez de botón suelto)
+    const pf = document.getElementById('patientForm');
+    if(pf) pf.onsubmit = e => { e.preventDefault(); this.savePatient(); };
+
+    // Tiempo de autobloqueo
+    const al = document.getElementById('autolock');
+    if(al) al.onchange = () => {
+      this.state.settings.autolock = +al.value;
+      this.save(); this.touch();
+      toast(+al.value ? `Se bloqueará tras ${al.options[al.selectedIndex].text.toLowerCase()} sin actividad.` : 'Autobloqueo desactivado.');
+    };
+
+    // Activar con Enter/Espacio las fotos que abren el visor
+    document.querySelectorAll('[data-action="viewPhoto"]').forEach(img => {
+      img.onkeydown = e => {
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); this.photoViewer(img.dataset.id); }
+      };
+    });
+
+    // Interruptores de ajustes
+    document.querySelectorAll('[data-setting]').forEach(x => x.onchange = () => {
+      this.state.settings[x.dataset.setting] = x.checked;
+      if(x.dataset.setting==='notifications' && x.checked && 'Notification' in window && Notification.permission==='default')
+        Notification.requestPermission();
+      this.save(); this.applySettings();
+    });
+  }
+
+  /* --- Enrutado de acciones (delegación) --- */
+  action(e){
+    const b = e.target.closest('[data-action]'); if(!b) return;
+    const a = b.dataset.action, id = b.dataset.id;
+    switch(a){
+      case 'admin': case 'skip': case 'postpone': case 'undo': return this.dose(a, id);
+      case 'newMed': return this.medDialog();
+      case 'editMed': return this.medDialog(this.med(id));
+      case 'stock': return this.stockDialog(this.med(id));
+      case 'symptom': return this.symptomDialog();
+      case 'rescue': return this.rescueDialog();
+      case 'newCaregiver': return this.caregiverDialog();
+      case 'editCaregiver': return this.caregiverDialog(this.caregiver(id));
+      case 'delCaregiver': return this.deleteCaregiver(id);
+      case 'viewMed': return this.medDetail(id);
+      case 'viewPhoto': return this.photoViewer(id);
+      case 'viewMode':
+        this.state.settings.medView = id;
+        this.save(); return this.render();
+      case 'setPin': case 'changePin': return this.pinDialog(a === 'changePin');
+      case 'removePin': return this.removePin();
+      case 'lockNow': return this.lock();
+      case 'exportJSON': return this.exportBackup();
+      case 'exportCSV': return this.exportCSV();
+      case 'import': return document.getElementById('importFile').click();
+      case 'restorePrev': return this.restorePrevious();
+      case 'restoreSnap': return this.restoreSnapshot(+id);
+      case 'reset': return this.resetData();
+      case 'resetAgenda':
+        this.state.agenda = MedicationSchedule.today(this.state.medications);
+        this.save(); this.render(); return toast('Agenda recreada.', 'good');
+    }
+  }
+
+  /* --- Acciones sobre dosis (con diálogos accesibles) --- */
+  async dose(action, id){
+    const a = this.state.agenda.find(x=>x.id===id); if(!a) return;
+    const m = this.med(a.medId);
+    if(action==='admin'){
+      const who = await this.pickResponsible(m);
+      if(who===null) return;
+      a.status='administered'; a.actual=new Date().toISOString(); a.responsible=who;
+      m.stock = Math.max(0, m.stock-1);
+      new HistoryManager().add(this.state,'medicación',`${m.name} administrado`,{responsible:who});
+      toast(`${m.name} administrado.`, 'good');
+    } else if(action==='skip'){
+      const motivo = await promptDialog({title:'Omitir dosis', label:'Motivo de la omisión', type:'textarea', required:false, placeholder:'Opcional'});
+      if(motivo===null) return;
+      a.status='skipped'; a.actual=new Date().toISOString(); a.note=motivo;
+      new HistoryManager().add(this.state,'medicación',`${m.name} omitido${motivo?': '+motivo:''}`);
+      toast(`${m.name} omitido.`);
+    } else if(action==='postpone'){
+      const t = await promptDialog({title:'Posponer dosis', label:'Nueva hora', type:'time', value:a.time,
+        validate:v => RE_TIME.test(v) ? '' : 'Use una hora válida (HH:MM).'});
+      if(t===null) return;
+      a.time=t; a.status='postponed'; a.note='Pospuesto';
+      this.state.agenda.sort((x,y)=>x.time.localeCompare(y.time));
+      toast(`Dosis pospuesta a las ${t}.`);
+    } else { // undo
+      a.status='pending'; a.actual=''; a.responsible='';
+    }
+    this.save(); this.render();
+  }
+
+  async resetData(){
+    const ok = await confirmDialog({title:'Restablecer datos', message:'¿Restablecer los datos de ejemplo? Se perderán los cambios actuales.', confirmText:'Restablecer', danger:true});
+    if(!ok) return;
+    this.state = this.seed(); this.save(); this.render(); toast('Datos de ejemplo restablecidos.', 'good');
+  }
+
+  /* --- Diálogo de medicamento (crear/editar) --- */
+  medDialog(m = new Medication()){
+    const edit = this.state.medications.some(x=>x.id===m.id);
+    let image = m.photo;
+    Modal.open(`
+      <h2 id="dialogTitle">${edit?'Editar':'Nuevo'} medicamento</h2>
+      <form id="medForm" class="form" novalidate>
+        <label>Nombre <span class="req">*</span><input class="input" name="name" required value="${escapeHtml(m.name)}"><p class="err" data-err="name" role="alert"></p></label>
+        <label>Principio activo<input class="input" name="activeIngredient" value="${escapeHtml(m.activeIngredient)}"></label>
+        <label>Dosis <span class="req">*</span><input class="input" name="dose" required value="${escapeHtml(m.dose)}"><p class="err" data-err="dose" role="alert"></p></label>
+        <label>Unidad<input class="input" name="unit" value="${escapeHtml(m.unit)}"></label>
+        <label>Presentación<input class="input" name="presentation" value="${escapeHtml(m.presentation)}"></label>
+        <label>Vía<input class="input" name="route" value="${escapeHtml(m.route)}"></label>
+        <label class="full">Horarios <span class="req">*</span><input class="input" name="times" required value="${escapeHtml(m.times.join(', '))}"><span class="hint">Formato HH:MM separados por coma. Ej: 08:00, 20:00</span><p class="err" data-err="times" role="alert"></p></label>
+        <label>Stock<input class="input" name="stock" type="number" min="0" inputmode="numeric" value="${escapeHtml(m.stock)}"></label>
+        <label>Stock mínimo<input class="input" name="minStock" type="number" min="0" inputmode="numeric" value="${escapeHtml(m.minStock)}"></label>
+        <label>Vencimiento<input class="input" name="expiry" type="date" value="${escapeHtml(m.expiry)}"></label>
+        <label>Laboratorio<input class="input" name="lab" value="${escapeHtml(m.lab)}"></label>
+        <label>Código nacional<input class="input" name="nationalCode" value="${escapeHtml(m.nationalCode)}"></label>
+        <label class="full">Indicación<input class="input" name="indication" value="${escapeHtml(m.indication)}"></label>
+        <label class="full">Observaciones<textarea class="input" name="notes">${escapeHtml(m.notes)}</textarea></label>
+        <div class="full drop" id="drop">
+          <p><b>Foto del medicamento</b><br>
+            <span class="muted">Arrastra una imagen aquí o selecciónala. Se usa en la portada y en la ficha.</span></p>
+          <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="Foto del medicamento">
+          <p class="hint">JPG, PNG, WEBP, GIF o BMP · máximo 8 MB. Se reduce a 720 px y se eliminan
+            los metadatos (EXIF y ubicación) antes de guardarla.</p>
+          <p class="err" id="photoErr" role="alert"></p>
+          <div id="imgState"></div>
+        </div>
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" type="button" data-close>Cancelar</button>
+        <button class="btn" type="submit" form="medForm" id="saveMed">Guardar medicamento</button>
+      </div>`, { onOpen:() => {
+        const drop  = document.getElementById('drop');
+        const box   = document.getElementById('imgState');
+        const errEl = document.getElementById('photoErr');
+
+        /* Muestra la vista previa con su peso real ya comprimido */
+        const preview = () => {
+          if(!image){ box.innerHTML = ''; return; }
+          box.innerHTML = `
+            <img class="photo-preview" src="${safeImage(image)}" alt="Vista previa de la foto">
+            <p class="photo-meta">Guardada como JPEG · ${ImageTools.kb(image)} KB</p>
+            <button class="btn secondary small" type="button" id="photoDel">Quitar foto</button>`;
+          document.getElementById('photoDel').onclick = () => { image = ''; errEl.textContent = ''; preview(); };
+        };
+        preview();
+
+        /* Procesa el archivo: valida, redimensiona y limpia metadatos */
+        const load = async f => {
+          errEl.textContent = '';
+          try{
+            const r = await ImageTools.fromFile(f);
+            image = r.dataUrl;
+            preview();
+            toast(`Foto lista: ${r.width}×${r.height} px, ${ImageTools.kb(image)} KB.`, 'good');
+          }catch(ex){
+            errEl.textContent = ex.message;
+          }
+        };
+        document.getElementById('photoFile').onchange = e => load(e.target.files[0]);
+        drop.ondragover  = e => { e.preventDefault(); drop.classList.add('over'); };
+        drop.ondragleave = () => drop.classList.remove('over');
+        drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); load(e.dataTransfer.files[0]); };
+      }});
+
+    // Guardado con validación accesible inline
+    const form = document.getElementById('medForm');
+    const showErr = (name, msg) => {
+      const field = form.elements[name], box = form.querySelector(`[data-err="${name}"]`);
+      if(box) box.textContent = msg;
+      field.setAttribute('aria-invalid', msg ? 'true' : 'false');
+    };
+    form.onsubmit = e => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(form));
+      let firstBad = null;
+      ['name','dose','times'].forEach(k => showErr(k,''));
+      if(!f.name.trim()){ showErr('name','El nombre es obligatorio.'); firstBad ??= 'name'; }
+      if(!f.dose.trim()){ showErr('dose','La dosis es obligatoria.'); firstBad ??= 'dose'; }
+      const times = f.times.split(',').map(x=>x.trim()).filter(Boolean);
+      const validTimes = times.length && times.every(x => RE_TIME.test(x));
+      if(!validTimes){ showErr('times','Use horarios válidos, por ejemplo: 08:00, 20:00.'); firstBad ??= 'times'; }
+      if(firstBad){ form.elements[firstBad].focus(); return; }
+
+      Object.assign(m, f);
+      m.times = times; m.stock = +f.stock || 0; m.minStock = +f.minStock || 0; m.photo = image;
+      if(!edit) this.state.medications.push(m);
+      this.state.agenda = MedicationSchedule.today(this.state.medications);
+      new HistoryManager().add(this.state,'configuración',`${m.name} ${edit?'actualizado':'creado'}`);
+      this.save(); Modal.close(); this.render();
+      toast(`${m.name} ${edit?'actualizado':'creado'}.`, 'good');
+    };
+  }
+
+  /* --- Ajuste de inventario --- */
+  stockDialog(m){
+    Modal.open(`
+      <h2 id="dialogTitle">Ajustar inventario</h2>
+      <p>${escapeHtml(m.name)}: <b>${m.stock}</b> unidades actuales.</p>
+      <form id="stockForm" novalidate>
+        <label for="stockChange">Cantidad a añadir o restar</label>
+        <input class="input" id="stockChange" type="number" inputmode="numeric" value="0">
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" type="button" data-close>Cancelar</button>
+        <button class="btn" type="submit" form="stockForm">Guardar</button>
+      </div>`, { onOpen(){ document.querySelector('#dialog').classList.add('sm'); } });
+    document.getElementById('stockForm').onsubmit = e => {
+      e.preventDefault();
+      const x = +document.getElementById('stockChange').value || 0;
+      m.stock = Math.max(0, m.stock + x);
+      new HistoryManager().add(this.state,'inventario',`${m.name}: ajuste de ${x>0?'+':''}${x}`);
+      this.save(); document.querySelector('#dialog').classList.remove('sm'); Modal.close(); this.render();
+      toast(`Inventario de ${m.name} actualizado.`, 'good');
+    };
+  }
+
+  /* --- Registro de síntomas --- */
+  symptomDialog(){
+    Modal.open(`
+      <h2 id="dialogTitle">Registrar síntomas</h2>
+      <form id="symForm" class="form" novalidate>
+        <label>Dolor (0–10) <span class="req">*</span><input class="input" name="pain" type="number" min="0" max="10" inputmode="numeric" required value="0"></label>
+        <label>Temperatura °C<input class="input" name="temp" type="number" step=".1" inputmode="decimal"></label>
+        <label>Presión arterial<input class="input" name="pressure" placeholder="120/80" inputmode="numeric"></label>
+        <label>Pulso<input class="input" name="pulse" type="number" inputmode="numeric"></label>
+        <label>Saturación %<input class="input" name="saturation" type="number" inputmode="numeric"></label>
+        <label>Respiración<input class="input" name="respiration" type="number" inputmode="numeric"></label>
+        <label>Náuseas<select class="input" name="nausea"><option>No</option><option>Leve</option><option>Moderada</option><option>Intensa</option></select></label>
+        <label>Vómitos<select class="input" name="vomiting"><option>No</option><option>Sí</option></select></label>
+        <label class="full">Observaciones<textarea class="input" name="notes"></textarea></label>
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" type="button" data-close>Cancelar</button>
+        <button class="btn" type="submit" form="symForm">Guardar registro</button>
+      </div>`);
+    document.getElementById('symForm').onsubmit = e => {
+      e.preventDefault();
+      const form = e.target;
+      if(!form.reportValidity()) return;
+      const x = Object.fromEntries(new FormData(form));
+      new SymptomTracker().add(x, this.state);
+      new HistoryManager().add(this.state,'síntomas',`Síntomas registrados: dolor ${x.pain}/10`);
+      this.save(); Modal.close(); this.render();
+      toast('Síntomas registrados.', 'good');
+    };
+  }
+
+  /* --- Medicación de rescate --- */
+  rescueDialog(){
+    const opts = this.state.medications.map(m=>`<option>${escapeHtml(m.name)}</option>`).join('');
+    Modal.open(`
+      <h2 id="dialogTitle">Medicación de rescate</h2>
+      <form id="resForm" class="form" novalidate>
+        <label>Motivo <span class="req">*</span><input class="input" name="reason" required></label>
+        <label>Medicamento<select class="input" name="medication">${opts}</select></label>
+        <label>Cantidad <span class="req">*</span><input class="input" name="amount" required placeholder="Ej. 5 mg"></label>
+        <label>Tiempo de alivio<input class="input" name="relief" placeholder="Ej. 20 min"></label>
+        <label class="full">Resultado<textarea class="input" name="result"></textarea></label>
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" type="button" data-close>Cancelar</button>
+        <button class="btn" type="submit" form="resForm">Registrar</button>
+      </div>`);
+    document.getElementById('resForm').onsubmit = e => {
+      e.preventDefault();
+      const form = e.target;
+      if(!form.reportValidity()) return;
+      const x = Object.fromEntries(new FormData(form));
+      x.id = uuid(); x.date = new Date().toISOString();
+      this.state.rescues.unshift(x);
+      new HistoryManager().add(this.state,'rescate',`${x.medication}: ${x.amount} por ${x.reason}`);
+      this.save(); Modal.close(); this.render();
+      toast('Dosis de rescate registrada.', 'good');
+    };
+  }
+
+  /* --- Diálogo de cuidador con selección MÚLTIPLE de medicamentos --- */
+  caregiverDialog(c = new Caregiver()){
+    const edit = this.state.caregivers.some(x=>x.id===c.id);
+    const roles = ['Familiar','Enfermero/a','Médico/a','Auxiliar','Otro'];
+    const checks = this.state.medications.map(m => `
+      <label class="check">
+        <input type="checkbox" name="med" value="${m.id}" ${c.medIds.includes(m.id)?'checked':''}>
+        <span class="dot" style="background:${escapeHtml(m.color||'#3a5bd0')}"></span>${escapeHtml(m.name)}
+      </label>`).join('') || '<span class="muted">No hay medicamentos. Crea alguno en Tratamiento.</span>';
+    Modal.open(`
+      <h2 id="dialogTitle">${edit?'Editar':'Nuevo'} cuidador</h2>
+      <form id="carForm" class="form" novalidate>
+        <label>Nombre <span class="req">*</span><input class="input" name="name" required autocomplete="name" value="${escapeHtml(c.name)}"><p class="err" data-err="name" role="alert"></p></label>
+        <label>Rol<select class="input" name="role">${roles.map(r=>`<option ${c.role===r?'selected':''}>${r}</option>`).join('')}</select></label>
+        <label>Teléfono<input class="input" name="phone" type="tel" autocomplete="tel" value="${escapeHtml(c.phone)}"></label>
+        <label class="full">Observaciones<textarea class="input" name="notes">${escapeHtml(c.notes)}</textarea></label>
+        <fieldset class="full checks">
+          <legend>Medicamentos a cargo <span class="hint">(selecciona uno o varios)</span></legend>
+          ${checks}
+        </fieldset>
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" type="button" data-close>Cancelar</button>
+        <button class="btn" type="submit" form="carForm">Guardar cuidador</button>
+      </div>`);
+    const form = document.getElementById('carForm');
+    form.onsubmit = e => {
+      e.preventDefault();
+      const name = form.elements.name.value.trim();
+      const box = form.querySelector('[data-err="name"]');
+      if(!name){ box.textContent = 'El nombre es obligatorio.'; form.elements.name.setAttribute('aria-invalid','true'); form.elements.name.focus(); return; }
+      c.name = name;
+      c.role = form.elements.role.value;
+      c.phone = form.elements.phone.value.trim();
+      c.notes = form.elements.notes.value.trim();
+      c.medIds = [...form.querySelectorAll('input[name="med"]:checked')].map(i=>i.value);
+      if(!edit) this.state.caregivers.push(c);
+      new HistoryManager().add(this.state,'cuidador',`${c.name} ${edit?'actualizado':'añadido'} (${c.medIds.length} medicamento/s)`);
+      this.save(); Modal.close(); this.render();
+      toast(`Cuidador ${c.name} ${edit?'actualizado':'añadido'}.`, 'good');
+    };
+  }
+
+  async deleteCaregiver(id){
+    const c = this.caregiver(id); if(!c) return;
+    const ok = await confirmDialog({title:'Eliminar cuidador', message:`¿Eliminar a ${c.name}? Esta acción no borra el historial.`, confirmText:'Eliminar', danger:true});
+    if(!ok) return;
+    this.state.caregivers = this.state.caregivers.filter(x=>x.id!==id);
+    new HistoryManager().add(this.state,'cuidador',`${c.name} eliminado`);
+    this.save(); this.render(); toast('Cuidador eliminado.');
+  }
+
+  /* --- Selección del responsable al administrar (entre los cuidadores) --- */
+  pickResponsible(m){
+    return new Promise(resolve => {
+      const list = this.state.caregivers;
+      const assigned = list.filter(c=>c.medIds.includes(m.id));
+      const others = list.filter(c=>!c.medIds.includes(m.id));
+      const opt = c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}${c.role?' · '+escapeHtml(c.role):''}</option>`;
+      const groups =
+        (assigned.length ? `<optgroup label="Responsables de ${escapeHtml(m.name)}">${assigned.map(opt).join('')}</optgroup>` : '') +
+        (others.length ? `<optgroup label="Otros cuidadores">${others.map(opt).join('')}</optgroup>` : '');
+      Modal.open(`
+        <h2 id="dialogTitle">Registrar administración</h2>
+        <p class="muted">${escapeHtml(m.name)} · ${escapeHtml(m.dose)} ${escapeHtml(m.unit)}</p>
+        <form id="admForm" novalidate>
+          <label for="admWho">Responsable de la administración</label>
+          <select class="input" id="admWho" name="who">
+            ${groups}
+            <option value="__custom__">Otro/a (escribir)…</option>
+          </select>
+          <div id="admCustomWrap" hidden style="margin-top:12px">
+            <label for="admCustom">Nombre del responsable</label>
+            <input class="input" id="admCustom" placeholder="Nombre" autocomplete="name">
+          </div>
+          <p class="err" id="admErr" role="alert"></p>
+        </form>
+        <div class="modal-foot">
+          <button class="btn secondary" type="button" data-close>Cancelar</button>
+          <button class="btn" type="submit" form="admForm">Registrar</button>
+        </div>`, { onOpen(){ document.querySelector('#dialog').classList.add('sm'); } });
+      const sel = document.getElementById('admWho'), wrap = document.getElementById('admCustomWrap'), custom = document.getElementById('admCustom');
+      const sync = () => { const isC = sel.value==='__custom__'; wrap.hidden = !isC; if(isC) custom.focus(); };
+      if(!list.length) sel.value = '__custom__';
+      sel.onchange = sync; sync();
+      const finish = v => { document.querySelector('#dialog')?.classList.remove('sm'); Modal.close(); resolve(v); };
+      document.getElementById('admForm').onsubmit = e => {
+        e.preventDefault();
+        const who = sel.value==='__custom__' ? custom.value.trim() : sel.value;
+        if(!who){ document.getElementById('admErr').textContent = 'Indique el responsable.'; custom.focus(); return; }
+        finish(who);
+      };
+      Modal.host.addEventListener('click', function h(e){
+        if(e.target===Modal.host || e.target.closest('[data-close]')){
+          Modal.host.removeEventListener('click', h);
+          document.querySelector('#dialog')?.classList.remove('sm');
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  savePatient(){
+    this.state.patient = new Patient({
+      name: document.getElementById('pName').value,
+      age: +document.getElementById('pAge').value,
+      diagnosis: document.getElementById('pDiagnosis').value
+    });
+    this.save(); this.render(); toast('Datos del paciente guardados.', 'good');
+  }
+
+  /* ============================================================
+     FICHA DEL MEDICAMENTO Y VISOR DE FOTOS
+     ============================================================ */
+  medDetail(id){
+    const m = this.med(id); if(!m) return;
+    const responsables = this.caregiversFor(m.id);
+    const fila = (k, v) => v ? `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>` : '';
+    Modal.open(`
+      <h2 id="dialogTitle">${escapeHtml(m.name)}</h2>
+      <div class="detail">
+        <img class="detail-photo" id="detailPhoto" src="${safeImage(m.photo)}"
+             alt="Foto de ${escapeHtml(m.name)}" title="Ampliar la foto">
+        <div>
+          <dl class="kv">
+            ${fila('Principio activo', m.activeIngredient)}
+            ${fila('Dosis', `${m.dose} ${m.unit}`)}
+            ${fila('Presentación', m.presentation)}
+            ${fila('Vía', m.route)}
+            ${fila('Horarios', m.times.join(', '))}
+            ${fila('Indicación', m.indication)}
+            ${fila('Laboratorio', m.lab)}
+            ${fila('Código nacional', m.nationalCode)}
+            ${fila('Vencimiento', m.expiry)}
+            <dt>Inventario</dt><dd>${m.stock} unidades · ${Inventory.days(m)} días
+              ${Inventory.level(m)==='low' ? '<span class="pill bad">Stock bajo</span>' : ''}</dd>
+          </dl>
+          ${m.notes ? `<p class="muted" style="margin-top:14px">${escapeHtml(m.notes)}</p>` : ''}
+          <div style="margin-top:16px">
+            <span class="muted" style="font-size:.82rem">Cuidadores responsables</span>
+            <div class="chips">${responsables.length
+              ? responsables.map(c => `<span class="chip">${escapeHtml(c.name)}</span>`).join('')
+              : '<span class="muted">Sin asignar</span>'}</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn secondary" type="button" data-close>Cerrar</button>
+        <button class="btn" type="button" id="detailEdit">Editar medicamento</button>
+      </div>`);
+    document.getElementById('detailPhoto').onclick = () => this.photoViewer(m.id);
+    document.getElementById('detailEdit').onclick  = () => { Modal.close(); this.medDialog(m); };
+  }
+
+  photoViewer(id){
+    const m = this.med(id); if(!m) return;
+    Modal.open(`
+      <h2 id="dialogTitle">${escapeHtml(m.name)}</h2>
+      <div class="viewer"><img src="${safeImage(m.photo)}" alt="Foto ampliada de ${escapeHtml(m.name)}"></div>
+      <p class="muted" style="text-align:center;margin-top:12px">
+        ${m.photo ? ImageTools.kb(m.photo) + ' KB · guardada solo en este dispositivo'
+                  : 'Este medicamento aún no tiene foto. Añádela desde Editar.'}</p>
+      <div class="modal-foot"><button class="btn secondary" type="button" data-close>Cerrar</button></div>`);
+  }
+
+  /* ============================================================
+     GESTIÓN DEL PIN
+     ============================================================ */
+  pinDialog(cambiar){
+    Modal.open(`
+      <h2 id="dialogTitle">${cambiar ? 'Cambiar' : 'Activar'} el PIN</h2>
+      <p class="muted">Entre 4 y 12 caracteres. Se guarda derivado con PBKDF2-SHA256 y sal aleatoria,
+        nunca en claro. Si lo olvidas no hay forma de recuperarlo.</p>
+      <form id="pinForm" novalidate>
+        ${cambiar ? `<label for="pinOld">PIN actual</label>
+          <input class="input pin" id="pinOld" type="password" inputmode="numeric" autocomplete="off" maxlength="12">` : ''}
+        <label for="pinNew" style="display:block;margin-top:12px">PIN nuevo</label>
+        <input class="input pin" id="pinNew" type="password" inputmode="numeric" autocomplete="new-password" maxlength="12">
+        <label for="pinRep" style="display:block;margin-top:12px">Repite el PIN nuevo</label>
+        <input class="input pin" id="pinRep" type="password" inputmode="numeric" autocomplete="new-password" maxlength="12">
+        <p class="err" id="pinErr" role="alert"></p>
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" type="button" data-close>Cancelar</button>
+        <button class="btn" type="submit" form="pinForm">Guardar PIN</button>
+      </div>`, { onOpen(){ document.querySelector('#dialog').classList.add('sm'); } });
+
+    document.getElementById('pinForm').onsubmit = async e => {
+      e.preventDefault();
+      const err = document.getElementById('pinErr');
+      const nuevo = document.getElementById('pinNew').value.trim();
+      const rep   = document.getElementById('pinRep').value.trim();
+      if(cambiar && !await this.pin.verify(document.getElementById('pinOld').value.trim())){
+        err.textContent = 'El PIN actual no es correcto.'; return;
+      }
+      if(nuevo.length < 4 || nuevo.length > 12){ err.textContent = 'El PIN debe tener entre 4 y 12 caracteres.'; return; }
+      if(nuevo !== rep){ err.textContent = 'Los dos PIN no coinciden.'; return; }
+      await this.pin.set(nuevo);
+      document.querySelector('#dialog')?.classList.remove('sm');
+      Modal.close(); this.render();
+      toast(cambiar ? 'PIN actualizado.' : 'Bloqueo con PIN activado.', 'good');
+    };
+  }
+
+  async removePin(){
+    const ok = await confirmDialog({
+      title:'Quitar el PIN',
+      message:'Cualquiera que abra este navegador podrá ver la información del paciente sin pedir nada. ¿Continuar?',
+      confirmText:'Quitar el PIN', danger:true });
+    if(!ok) return;
+    const pin = await promptDialog({ title:'Confirma tu identidad', label:'PIN actual', type:'password' });
+    if(pin === null) return;
+    if(!await this.pin.verify(pin)){ toast('El PIN no es correcto.', 'bad'); return; }
+    this.pin.clear(); this.render();
+    toast('Bloqueo con PIN desactivado.');
+  }
+
+  /* ============================================================
+     RESPALDO CIFRADO
+     Exportar: AES-GCM 256 + PBKDF2-SHA256 (310 000 iteraciones).
+     Importar: acepta el formato cifrado y, por compatibilidad,
+     los respaldos antiguos en claro (avisando de ello).
+     ============================================================ */
+  download(name, data, type){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], {type}));
+    a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  exportCSV(){
+    const r = [['Fecha','Tipo','Detalle'], ...this.state.history.map(x=>[x.date,x.type,x.text])];
+    this.download('cuida-historial.csv',
+      r.map(x=>x.map(y=>'"'+String(y).replaceAll('"','""')+'"').join(',')).join('\n'), 'text/csv');
+    toast('Historial exportado a CSV.', 'good');
+  }
+
+  async exportBackup(){
+    if(!SECURE){ toast('El respaldo cifrado necesita https:// o localhost.', 'bad'); return; }
+    const pass = await this.newPasswordDialog();
+    if(pass === null) return;
+    toast('Cifrando el respaldo…');
+    try{
+      const sobre = await Vault.encrypt(this.state, pass);
+      this.download(`cuida-respaldo-${new Date().toISOString().slice(0,10)}.json`,
+        JSON.stringify(sobre, null, 2), 'application/json');
+      this.state.settings.lastBackup = new Date().toISOString();
+      this.save();
+      if(this.page === 'settings') this.render();
+      toast('Respaldo cifrado descargado. Guarda bien la contraseña: sin ella el archivo no se puede abrir.', 'good', 10000);
+    }catch{
+      toast('No se pudo cifrar el respaldo.', 'bad');
+    }
+  }
+
+  /* Contraseña nueva, con confirmación y medidor de robustez */
+  newPasswordDialog(){
+    return new Promise(resolve => {
+      Modal.open(`
+        <h2 id="dialogTitle">Contraseña del respaldo</h2>
+        <p class="muted">El archivo se cifra con AES-GCM 256. Nadie podrá abrirlo sin esta contraseña,
+          y no existe forma de recuperarla: anótala en un lugar seguro.</p>
+        <form id="pwForm" novalidate>
+          <label for="pw1">Contraseña</label>
+          <input class="input" id="pw1" type="password" autocomplete="new-password">
+          <div class="meter" id="pwMeter" aria-hidden="true"><i></i></div>
+          <p class="hint" id="pwHint">Mínimo 8 caracteres. Mezcla mayúsculas, minúsculas, números y símbolos.</p>
+          <label for="pw2" style="display:block;margin-top:12px">Repite la contraseña</label>
+          <input class="input" id="pw2" type="password" autocomplete="new-password">
+          <p class="err" id="pwErr" role="alert"></p>
+        </form>
+        <div class="modal-foot">
+          <button class="btn secondary" type="button" data-close>Cancelar</button>
+          <button class="btn" type="submit" form="pwForm">Cifrar y descargar</button>
+        </div>`, { onOpen(){ document.querySelector('#dialog').classList.add('sm'); } });
+
+      const p1 = document.getElementById('pw1'), meter = document.getElementById('pwMeter');
+      const hint = document.getElementById('pwHint');
+      p1.oninput = () => {
+        const v = p1.value;
+        let s = 0;
+        if(v.length >= 8) s++; if(v.length >= 12) s++;
+        if(/[a-z]/.test(v) && /[A-Z]/.test(v)) s++;
+        if(/\d/.test(v)) s++; if(/[^\w\s]/.test(v)) s++;
+        meter.className = 'meter' + (s >= 4 ? ' ok' : s >= 3 ? ' mid' : '');
+        meter.querySelector('i').style.width = Math.min(100, s * 20) + '%';
+        hint.textContent = v.length < 8 ? 'Mínimo 8 caracteres.'
+          : s >= 4 ? 'Contraseña robusta.' : 'Añade mayúsculas, números o símbolos para reforzarla.';
+      };
+      const cerrar = v => { document.querySelector('#dialog')?.classList.remove('sm'); Modal.close(); resolve(v); };
+      document.getElementById('pwForm').onsubmit = e => {
+        e.preventDefault();
+        const err = document.getElementById('pwErr'), a = p1.value, b = document.getElementById('pw2').value;
+        if(a.length < 8){ err.textContent = 'Usa al menos 8 caracteres.'; p1.focus(); return; }
+        if(a !== b){ err.textContent = 'Las contraseñas no coinciden.'; return; }
+        cerrar(a);
+      };
+      Modal.host.addEventListener('click', function h(e){
+        if(e.target === Modal.host || e.target.closest('[data-close]')){
+          Modal.host.removeEventListener('click', h);
+          document.querySelector('#dialog')?.classList.remove('sm');
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  /* --- Restauración desde archivo --- */
+  handleImport(e){
+    const f = e.target.files[0];
+    e.target.value = '';
+    if(!f) return;
+    if(f.size > 25 * 1024 * 1024){ toast('El archivo es demasiado grande para ser un respaldo de Cuida.', 'bad'); return; }
+    const r = new FileReader();
+    r.onerror = () => toast('No se pudo leer el archivo.', 'bad');
+    r.onload = async () => {
+      let sobre;
+      try{ sobre = JSON.parse(r.result); }
+      catch{ toast('El archivo no es un respaldo válido de Cuida.', 'bad'); return; }
+
+      if(Vault.isEncrypted(sobre)){
+        if(!SECURE){ toast('Para abrir un respaldo cifrado necesitas https:// o localhost.', 'bad'); return; }
+        const pass = await promptDialog({
+          title:'Respaldo cifrado',
+          label:`Contraseña del respaldo (creado el ${sobre.createdAt ? new Date(sobre.createdAt).toLocaleDateString('es-CO') : 'sin fecha'})`,
+          type:'password' });
+        if(pass === null) return;
+        try{
+          const datos = await Vault.decrypt(sobre, pass);
+          this.applyImported(datos, 'Respaldo cifrado restaurado correctamente.');
+        }catch{
+          toast('Contraseña incorrecta o archivo alterado. No se restauró nada.', 'bad', 8000);
+        }
+        return;
+      }
+      // Compatibilidad: respaldos antiguos sin cifrar
+      const ok = await confirmDialog({
+        title:'Respaldo sin cifrar',
+        message:'Este archivo es de una versión anterior y no está cifrado. ¿Quieres restaurarlo igualmente?',
+        confirmText:'Restaurar' });
+      if(!ok) return;
+      this.applyImported(sobre, 'Respaldo antiguo restaurado. Descarga uno nuevo para tenerlo cifrado.');
+    };
+    r.readAsText(f);
+  }
+
+  /* Valida la forma de los datos antes de sustituir el estado */
+  validState(d){
+    return !!(d && typeof d === 'object' && !Array.isArray(d)
+      && d.patient && typeof d.patient === 'object'
+      && Array.isArray(d.medications));
+  }
+  applyImported(datos, mensaje){
+    if(!this.validState(datos)){ toast('El contenido no tiene la estructura de Cuida.', 'bad'); return; }
+    this.state = datos;
+    this.migrate();
+    this.save(); this.render();
+    toast(mensaje, 'good', 7000);
+  }
+
+  /* --- Restauración desde las copias locales --- */
+  async restorePrevious(){
+    const prev = this.store.previous();
+    if(!prev){ toast('No hay copia anterior disponible.', 'bad'); return; }
+    const ok = await confirmDialog({
+      title:'Restaurar el estado anterior',
+      message:'Se sustituirán los datos actuales por la copia guardada antes del último cambio.',
+      confirmText:'Restaurar', danger:true });
+    if(ok) this.applyImported(prev, 'Estado anterior restaurado.');
+  }
+  async restoreSnapshot(i){
+    const c = this.store.snapshots()[i];
+    if(!c){ toast('Esa copia ya no está disponible.', 'bad'); return; }
+    const ok = await confirmDialog({
+      title:'Restaurar copia del ' + new Date(c.at).toLocaleDateString('es-CO'),
+      message:'Esta copia no incluye las fotos de los medicamentos; el resto de la información se recupera completa.',
+      confirmText:'Restaurar', danger:true });
+    if(!ok) return;
+    try{ this.applyImported(JSON.parse(c.data), 'Copia restaurada (sin fotos).'); }
+    catch{ toast('La copia está dañada y no se pudo leer.', 'bad'); }
+  }
+}
+
+const app = new App();
+</script>
+</body>
+</html>
