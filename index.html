@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- ============================================================
        SEGURIDAD DE LA INFORMACIÓN (defensa en profundidad)
-       - CSP: sin scripts externos, sin conexiones de red salientes
-         (connect-src 'none') => los datos clínicos NO pueden salir
-         del dispositivo aunque se inyectara código.
+       - CSP: sin scripts externos. connect-src 'self' permite leer
+         únicamente perfil.json del propio sitio: no hay ningún
+         destino externo al que se puedan enviar datos.
        - object/frame/base/form-action bloqueados: sin incrustaciones
          ni envíos de formulario a terceros.
        - noindex: la página es pública en GitHub Pages, pero no debe
          aparecer en buscadores.
        ============================================================ -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#3a5bd0">
@@ -558,7 +558,10 @@ const B64 = {
    Sal e IV se generan nuevos en cada exportación.
    ------------------------------------------------------------ */
 class Vault{
-  static ITERATIONS = 310000; // recomendación OWASP para PBKDF2-SHA256
+  /* 600 000 iteraciones: recomendación OWASP vigente para PBKDF2-SHA256.
+     Importa especialmente aquí, porque el perfil cifrado se publica en un
+     repositorio público y cualquiera puede intentar romperlo sin conexión. */
+  static ITERATIONS = 600000;
 
   static async derive(pass, salt, iterations, usages){
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
@@ -566,26 +569,83 @@ class Vault{
       { name:'PBKDF2', salt, iterations, hash:'SHA-256' },
       base, { name:'AES-GCM', length:256 }, false, usages);
   }
-  static async encrypt(obj, pass){
-    if(!SECURE) throw new Error('Cifrado no disponible en este contexto.');
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv   = crypto.getRandomValues(new Uint8Array(12));
-    const key  = await this.derive(pass, salt, this.ITERATIONS, ['encrypt']);
-    const ct   = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key,
-                   new TextEncoder().encode(JSON.stringify(obj)));
+  /* Deriva la clave a partir de la contraseña y la sal de un sobre ya
+     existente. Se hace UNA vez por sesión: repetir 600 000 iteraciones
+     en cada guardado dejaría la aplicación inutilizable en el móvil. */
+  static keyFor(sobre, pass, usos = ['encrypt','decrypt']){
+    return this.derive(pass, B64.to(sobre.salt), sobre.iterations || this.ITERATIONS, usos);
+  }
+
+  /* Cierra el sobre con una clave ya derivada (solo AES: instantáneo) */
+  static async sealWith(key, obj, salt, iterations){
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key,
+                 new TextEncoder().encode(JSON.stringify(obj)));
     return {
       format:'cuida-backup', version:2, app:'Cuida',
-      cipher:'AES-GCM-256', kdf:'PBKDF2-SHA256', iterations:this.ITERATIONS,
+      cipher:'AES-GCM-256', kdf:'PBKDF2-SHA256', iterations,
       salt:B64.from(salt), iv:B64.from(iv), data:B64.from(ct),
       createdAt:new Date().toISOString()
     };
   }
-  static async decrypt(file, pass){
-    const key = await this.derive(pass, B64.to(file.salt), file.iterations || this.ITERATIONS, ['decrypt']);
-    const out = await crypto.subtle.decrypt({name:'AES-GCM', iv:B64.to(file.iv)}, key, B64.to(file.data));
+  static async openWith(key, sobre){
+    const out = await crypto.subtle.decrypt({name:'AES-GCM', iv:B64.to(sobre.iv)}, key, B64.to(sobre.data));
     return JSON.parse(new TextDecoder().decode(out));
   }
+
+  static async encrypt(obj, pass){
+    if(!SECURE) throw new Error('Cifrado no disponible en este contexto.');
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const key  = await this.derive(pass, salt, this.ITERATIONS, ['encrypt']);
+    return this.sealWith(key, obj, salt, this.ITERATIONS);
+  }
+  static async decrypt(file, pass){
+    return this.openWith(await this.keyFor(file, pass, ['decrypt']), file);
+  }
   static isEncrypted(o){ return !!(o && o.format === 'cuida-backup' && o.data && o.salt && o.iv); }
+}
+
+/* ------------------------------------------------------------
+   Profile · Perfil cifrado publicado en el repositorio
+   Los datos viajan como «perfil.json»: el mismo sobre AES-GCM que
+   el respaldo. El navegador lo descarga del propio sitio y lo
+   descifra con la clave de acceso. Consecuencias, sin rodeos:
+     · Sin la clave no se muestra absolutamente nada, en cualquier
+       navegador y dispositivo: el descifrado ES la puerta.
+     · El archivo es público, así que alguien puede descargarlo e
+       intentar romperlo sin conexión. La clave debe ser larga.
+     · No hay servidor: publicar cambios significa reemplazar el
+       archivo en el repositorio y subirlo.
+   ------------------------------------------------------------ */
+class Profile{
+  static FILE  = 'perfil.json';
+  static CACHE = 'cuida-cache-cifrada';
+  static AUTOLOCK = 'cuida-autobloqueo';
+
+  /* Perfil publicado en el sitio; null si aún no se ha publicado ninguno */
+  static async published(){
+    if(typeof fetch !== 'function') return null;
+    try{
+      const r = await fetch(this.FILE + '?v=' + Date.now(), {cache:'no-store'});
+      if(!r.ok) return null;
+      const j = await r.json();
+      return Vault.isEncrypted(j) ? j : null;
+    }catch{ return null; }   // sin perfil, sin red o abierto como archivo local
+  }
+
+  /* Copia local, también cifrada: permite recargar sin perder cambios */
+  static cache(){
+    try{
+      const j = JSON.parse(localStorage.getItem(this.CACHE));
+      return Vault.isEncrypted(j) ? j : null;
+    }catch{ return null; }
+  }
+  static saveCache(sobre){
+    try{ localStorage.setItem(this.CACHE, JSON.stringify(sobre)); return true; }
+    catch{ return false; }
+  }
+  static clearCache(){ localStorage.removeItem(this.CACHE); }
+  static when(o){ return o && o.createdAt ? new Date(o.createdAt).getTime() : 0; }
 }
 
 /* ------------------------------------------------------------
@@ -606,7 +666,7 @@ class PinLock{
   }
   async set(pin){
     const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iterations = 310000;
+    const iterations = Vault.ITERATIONS;
     localStorage.setItem(this.key, JSON.stringify({
       salt:B64.from(salt), iterations,
       hash: await this.digest(pin, salt, iterations),
@@ -733,6 +793,8 @@ class StorageManager{
   load(){ try{ return JSON.parse(localStorage.getItem(this.key)); }catch{ return null; } }
   previous(){ try{ return JSON.parse(localStorage.getItem(this.prev)); }catch{ return null; } }
   snapshots(){ try{ return JSON.parse(localStorage.getItem(this.snapKey)) || []; }catch{ return []; } }
+  /* Borra todo rastro legible: se usa al pasar al perfil cifrado */
+  wipePlain(){ [this.key, this.prev, this.snapKey].forEach(k => localStorage.removeItem(k)); }
 
   save(data){
     let json;
@@ -935,18 +997,43 @@ class App{
     this.notify = new NotificationManager();
     this.pin    = new PinLock();
     this.locked = false;
-    this.state  = this.store.load() || this.seed();
-    this.migrate();
-    this.page = 'dashboard';
-    this.save();
-    this.buildNav();
-    this.render();
+    this.mode   = 'local';   // 'local' = solo este navegador · 'perfil' = perfil cifrado publicado
+    this.pass   = null;      // clave de acceso: solo en memoria, nunca se guarda
+    this.page   = 'dashboard';
     // Reloj + refresco del panel cada 30 s
     setInterval(()=>{ this.updateClock(); this.renderIfDashboard(); }, 30000);
     this.updateClock();
     // Importación de respaldo
     document.getElementById('importFile').onchange = e => this.handleImport(e);
+  }
+
+  /* ============================================================
+     ARRANQUE
+     Si el sitio tiene un perfil publicado —o este navegador guarda
+     una copia cifrada— no se carga ni se pinta NADA hasta que la
+     clave de acceso descifre los datos.
+     ============================================================ */
+  async start(){
+    this.published = await Profile.published();
+    if(this.published || Profile.cache()){
+      this.mode = 'perfil';
+      this.initLock();
+      this.gate();
+      return;
+    }
+    this.bootLocal();
+  }
+
+  /* Modo local: los datos viven solo en este navegador (comportamiento previo) */
+  bootLocal(){
+    this.mode  = 'local';
+    this.state = this.store.load() || this.seed();
+    this.migrate();
+    this.save();
+    this.buildNav();
+    this.render();
     this.initLock();
+    if(this.pin.enabled()) this.lock(true);
     this.backupReminder();
   }
 
@@ -966,32 +1053,47 @@ class App{
   }
 
   /* ============================================================
-     BLOQUEO DE PANTALLA
-     Protege el acceso visual a la información en el dispositivo.
-     No cifra lo guardado: para llevarse los datos fuera del equipo
-     se usa el respaldo cifrado (ver exportBackup).
+     PUERTA DE ENTRADA Y BLOQUEO
+     En modo «perfil» el descifrado ES la puerta: mientras no se
+     introduzca la clave correcta no hay datos en memoria, así que
+     no hay nada que mostrar en ninguna pantalla.
+     En modo «local» el PIN protege el acceso visual en el equipo.
      ============================================================ */
   initLock(){
     this.lockEl = document.getElementById('lock');
     document.getElementById('lockForm').onsubmit = e => { e.preventDefault(); this.tryUnlock(); };
-    this.lockEl.querySelector('[data-forgot]').onclick = () => this.forgotPin();
     // Actividad del usuario para el autobloqueo
     ['pointerdown','keydown','touchstart','wheel'].forEach(ev =>
       document.addEventListener(ev, () => this.touch(), {passive:true}));
     setInterval(() => this.checkIdle(), 15000);
     this.touch();
-    if(this.pin.enabled()) this.lock(true);
   }
   touch(){ this.lastActivity = Date.now(); }
+
+  /* Minutos de inactividad; en modo perfil el ajuste se guarda aparte,
+     porque al bloquear se descarta todo el estado descifrado. */
+  autolockMinutes(){
+    if(this.state && this.state.settings) return +this.state.settings.autolock || 0;
+    return +(localStorage.getItem(Profile.AUTOLOCK) ?? 5);
+  }
   checkIdle(){
-    const min = +this.state.settings.autolock || 0;
-    if(!min || this.locked || !this.pin.enabled()) return;
+    const min = this.autolockMinutes();
+    if(!min || this.locked) return;
+    if(this.mode === 'local' && !this.pin.enabled()) return;
     if(Date.now() - this.lastActivity > min * 60000){
       this.lock();
       toast('Bloqueada por inactividad.');
     }
   }
+
   lock(silencioso){
+    if(this.mode === 'perfil'){
+      // Se borra de memoria la clave y los datos descifrados
+      this.pass = null; this.cacheKey = null; this.state = null;
+      this.gate();
+      if(!silencioso) this.announce('Aplicación bloqueada.');
+      return;
+    }
     if(!this.pin.enabled()) return;
     this.locked = true;
     document.body.classList.add('locked');
@@ -1000,10 +1102,112 @@ class App{
     if(!silencioso) this.announce('Aplicación bloqueada.');
   }
   renderLockBox(){
-    const err = document.getElementById('lockErr'), inp = document.getElementById('lockPin');
-    if(err) err.textContent = '';
-    if(inp){ inp.value = ''; setTimeout(() => inp.focus(), 60); }
+    const box = this.lockEl.querySelector('.lock-box');
+    box.innerHTML = `
+      <div class="lock-logo" aria-hidden="true">✚</div>
+      <h1 id="lockTitle">Aplicación bloqueada</h1>
+      <p class="muted">Introduce el PIN para ver la información.</p>
+      <form id="lockForm" novalidate>
+        <label class="sr-only" for="lockPin">PIN de acceso</label>
+        <input class="input pin" id="lockPin" type="password" inputmode="numeric"
+               autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="12" placeholder="••••">
+        <p class="err" id="lockErr" role="alert" aria-live="assertive"></p>
+        <div class="lock-foot">
+          <button class="btn" type="submit" id="lockBtn">Desbloquear</button>
+          <button class="btn secondary" type="button" data-forgot>He olvidado el PIN</button>
+        </div>
+      </form>`;
+    document.getElementById('lockForm').onsubmit = e => { e.preventDefault(); this.tryUnlock(); };
+    box.querySelector('[data-forgot]').onclick = () => this.forgotPin();
+    setTimeout(() => document.getElementById('lockPin')?.focus(), 60);
   }
+
+  /* --- Puerta del perfil cifrado --- */
+  gate(mensaje){
+    this.locked = true;
+    document.body.classList.add('locked');
+    this.lockEl = document.getElementById('lock');
+    this.lockEl.hidden = false;
+    const box = this.lockEl.querySelector('.lock-box');
+    box.innerHTML = `
+      <div class="lock-logo" aria-hidden="true">✚</div>
+      <h1 id="lockTitle">Cuida</h1>
+      <p class="muted">Introduce la clave de acceso para descifrar la información.</p>
+      ${SECURE ? '' : `<div class="alert bad"><b>No se puede descifrar aquí</b><br>
+        <small>Has abierto el archivo directamente. El descifrado necesita https:// o localhost.
+        Abre el sitio publicado en lugar del archivo.</small></div>`}
+      <form id="gateForm" novalidate>
+        <label class="sr-only" for="gatePass">Clave de acceso</label>
+        <input class="input" id="gatePass" type="password" autocomplete="current-password"
+               autocapitalize="off" spellcheck="false" placeholder="Clave de acceso" ${SECURE?'':'disabled'}>
+        <p class="err" id="gateErr" role="alert" aria-live="assertive">${escapeHtml(mensaje || '')}</p>
+        <div class="lock-foot">
+          <button class="btn" type="submit" id="gateBtn" ${SECURE?'':'disabled'}>Entrar</button>
+        </div>
+      </form>
+      <p class="muted" style="font-size:.8rem;margin-top:16px">
+        Los datos están cifrados con AES-GCM. Sin la clave no se descifran ni se muestran,
+        en ningún navegador ni dispositivo.</p>`;
+    document.getElementById('gateForm').onsubmit = e => { e.preventDefault(); this.tryGate(); };
+    setTimeout(() => document.getElementById('gatePass')?.focus(), 60);
+  }
+
+  async tryGate(){
+    const inp = document.getElementById('gatePass'),
+          err = document.getElementById('gateErr'),
+          btn = document.getElementById('gateBtn');
+    const espera = this.pin.waitMs();
+    if(espera > 0){ err.textContent = `Demasiados intentos. Espera ${Math.ceil(espera/1000)} s.`; return; }
+    if(!inp.value){ err.textContent = 'Introduce la clave de acceso.'; return; }
+
+    btn.disabled = true; err.textContent = 'Descifrando…';
+    const ok = await this.openProfile(inp.value);
+    btn.disabled = false;
+    if(ok){ this.pin.resetFails(); return; }
+
+    const n = this.pin.addFail();
+    inp.value = ''; inp.focus();
+    err.textContent = n >= 3
+      ? `Clave incorrecta. Espera ${Math.ceil(this.pin.waitMs()/1000)} s antes de reintentar.`
+      : `Clave incorrecta. Intento ${n} de 3.`;
+  }
+
+  /* Prueba la clave contra la copia local y contra el perfil publicado */
+  async openProfile(clave){
+    const cache = Profile.cache();
+    for(const sobre of [cache, this.published].filter(Boolean)){
+      try{
+        const key   = await Vault.keyFor(sobre, clave);
+        const datos = await Vault.openWith(key, sobre);
+        this.pass      = clave;
+        this.cacheKey  = key;
+        this.cacheSalt = B64.to(sobre.salt);
+        this.cacheIter = sobre.iterations || Vault.ITERATIONS;
+        this.state     = datos;
+        this.migrate();
+        this.locked = false;
+        document.body.classList.remove('locked');
+        this.lockEl.hidden = true;
+        this.touch();
+        this.buildNav();
+        this.render();
+        this.afterOpen(sobre === cache);
+        return true;
+      }catch{ /* esa clave no abre este sobre: se prueba el siguiente */ }
+    }
+    return false;
+  }
+
+  /* Avisos posteriores a la apertura: conflicto entre dispositivos y respaldo */
+  afterOpen(desdeCache){
+    const pub = this.published;
+    if(desdeCache && pub && Profile.when(pub) > new Date(this.state.updatedAt || 0).getTime()){
+      toast('El perfil publicado es más reciente que los cambios de este navegador. Puedes cargarlo desde Ajustes.', 'bad', 10000);
+    }
+    if(!desdeCache) toast('Perfil publicado cargado.', 'good');
+    this.backupReminder();
+  }
+
   unlock(){
     this.locked = false;
     document.body.classList.remove('locked');
@@ -1096,12 +1300,35 @@ class App{
   /* Guarda avisando si el navegador se queda sin espacio (las fotos
      son lo que más pesa cuando no hay base de datos externa). */
   save(){
+    if(!this.state) return {ok:false};
+    this.state.updatedAt = new Date().toISOString();
+    // El tiempo de autobloqueo se guarda aparte: hace falta ANTES de descifrar
+    if(this.state.settings) localStorage.setItem(Profile.AUTOLOCK, this.state.settings.autolock ?? 5);
+
+    if(this.mode === 'perfil'){ this.persistEncrypted(); return {ok:true}; }
+
     const r = this.store.save(this.state);
     if(!r.ok)
       toast('No se pudo guardar: el almacenamiento del navegador está lleno. Descarga un respaldo y elimina fotos que no uses.', 'bad', 10000);
     else if(r.warning === 'copias-liberadas')
       toast('Queda poco espacio: se liberaron las copias locales para poder guardar.', 'bad', 8000);
     return r;
+  }
+
+  /* En modo perfil el navegador NUNCA guarda nada legible: solo una copia
+     cifrada con la clave de acceso. Se agrupan las ráfagas de cambios. */
+  persistEncrypted(){
+    if(!this.cacheKey) return;
+    clearTimeout(this._persistTimer);
+    this._persistTimer = setTimeout(async () => {
+      try{
+        const sobre = await Vault.sealWith(this.cacheKey, this.state, this.cacheSalt, this.cacheIter);
+        if(!Profile.saveCache(sobre))
+          toast('Sin espacio para la copia local cifrada. Publica el perfil para no perder los cambios.', 'bad', 9000);
+      }catch{
+        toast('No se pudo cifrar la copia local de los cambios.', 'bad');
+      }
+    }, 400);
   }
   applySettings(){
     const s = this.state.settings;
@@ -1429,13 +1656,86 @@ class App{
             ni envío automático. Se abre la aplicación y tú confirmas el envío. Solo aparece para los
             cuidadores que tengan celular guardado.</p>
         </div>
+        ${this.profileHTML()}
         ${this.securityHTML()}
         ${this.backupHTML()}
       </div>`;
   }
 
+  /* --- Ajustes · Perfil cifrado compartido ------------------- */
+  profileHTML(){
+    const enPerfil = this.mode === 'perfil';
+    const pub = this.published;
+    const cambios = enPerfil && pub &&
+      new Date(this.state.updatedAt || 0).getTime() > Profile.when(pub);
+    return `
+      <div class="card">
+        <b>Perfil compartido entre dispositivos</b>
+        <div class="sec-state">
+          <span class="dot-state ${enPerfil?'on':''}" aria-hidden="true"></span>
+          <span>${enPerfil
+            ? 'Perfil cifrado activo · la clave protege el acceso en cualquier navegador'
+            : 'Solo este navegador · los datos no se comparten'}</span>
+        </div>
+
+        ${enPerfil ? `
+          <ul class="list" style="margin-top:8px">
+            <li><span>Última publicación</span><b>${pub ? new Date(pub.createdAt).toLocaleString('es-CO') : 'Sin publicar todavía'}</b></li>
+            <li><span>Último cambio en este equipo</span><b>${this.state.updatedAt ? new Date(this.state.updatedAt).toLocaleString('es-CO') : '—'}</b></li>
+          </ul>
+          ${cambios ? '<div class="alert">Hay cambios sin publicar. Los demás dispositivos aún no los ven.</div>' : ''}
+          <div class="actions" style="margin-top:14px">
+            <button class="btn" type="button" data-action="publishProfile">Generar perfil.json</button>
+            ${pub ? '<button class="btn secondary" type="button" data-action="loadPublished">Cargar el perfil publicado</button>' : ''}
+            <button class="btn secondary" type="button" data-action="changeKey">Cambiar la clave</button>
+            <button class="btn secondary" type="button" data-action="lockNow">Bloquear ahora</button>
+          </div>
+          <p class="muted" style="font-size:.82rem;margin-top:14px">
+            Para que los demás vean los cambios: pulsa <b>Generar perfil.json</b>, reemplaza el archivo
+            del repositorio con el que se descarga y súbelo. Mientras tanto, este navegador guarda los
+            cambios en una copia cifrada con tu misma clave.</p>
+        ` : `
+          <p class="muted">Publica un perfil cifrado para tener la misma información en todos los
+            dispositivos y que la aplicación pida clave en cualquier navegador. El archivo se sube al
+            repositorio; sin la clave no se puede leer.</p>
+          <div class="actions" style="margin-top:12px">
+            <button class="btn" type="button" data-action="publishProfile" ${SECURE?'':'disabled'}>Crear perfil cifrado</button>
+          </div>
+        `}
+
+        <p class="muted" style="font-size:.82rem;margin-top:14px">
+          Sé consciente del riesgo: el archivo es público, así que alguien puede descargarlo e intentar
+          adivinar la clave sin conexión. Por eso se exigen 12 caracteres como mínimo y conviene usar
+          una frase larga, no una palabra.</p>
+      </div>`;
+  }
+
   /* --- Ajustes · Seguridad ---------------------------------- */
   securityHTML(){
+    if(this.mode === 'perfil'){
+      const min = this.autolockMinutes();
+      const opciones = [[0,'Nunca'],[1,'1 minuto'],[5,'5 minutos'],[15,'15 minutos'],[30,'30 minutos']];
+      return `
+        <div class="card">
+          <b>Seguridad</b>
+          <div class="sec-state">
+            <span class="dot-state on" aria-hidden="true"></span>
+            <span>Datos cifrados en reposo con la clave de acceso</span>
+          </div>
+          <p class="muted">Nada se guarda legible en este navegador: la copia local va cifrada con
+            AES-GCM y la clave solo existe en memoria mientras la sesión está abierta. Al bloquear,
+            los datos descifrados se descartan.</p>
+          <label class="switch" style="margin-top:14px">
+            <span>Bloquear tras inactividad</span>
+            <select class="input" id="autolock" style="max-width:170px">
+              ${opciones.map(([v,t]) => `<option value="${v}" ${min===v?'selected':''}>${t}</option>`).join('')}
+            </select>
+          </label>
+          <div class="actions" style="margin-top:14px">
+            <button class="btn secondary" type="button" data-action="lockNow">Bloquear ahora</button>
+          </div>
+        </div>`;
+    }
     const activo = this.pin.enabled();
     const min = +this.state.settings.autolock || 0;
     const opciones = [[0,'Nunca'],[1,'1 minuto'],[5,'5 minutos'],[15,'15 minutos'],[30,'30 minutos']];
@@ -1497,7 +1797,7 @@ class App{
           <button class="btn danger" type="button" data-action="reset">Restablecer datos de ejemplo</button>
         </div>
 
-        <div style="margin-top:20px">
+        <div style="margin-top:20px" ${this.mode === 'perfil' ? 'hidden' : ''}>
           <b>Copias automáticas en este navegador</b>
           <p class="muted" style="font-size:.84rem">Copia del estado anterior y hasta 5 copias diarias.
             Las diarias se guardan sin fotos para ocupar poco espacio.</p>
@@ -1582,6 +1882,9 @@ class App{
       case 'viewMode':
         this.state.settings.medView = id;
         this.save(); return this.render();
+      case 'publishProfile': return this.publishProfile(false);
+      case 'changeKey': return this.publishProfile(true);
+      case 'loadPublished': return this.loadPublished();
       case 'setPin': case 'changePin': return this.pinDialog(a === 'changePin');
       case 'removePin': return this.removePin();
       case 'lockNow': return this.lock();
@@ -2158,6 +2461,87 @@ class App{
     toast('Historial exportado a CSV.', 'good');
   }
 
+  /* ============================================================
+     PERFIL CIFRADO: GENERAR, PUBLICAR Y RECARGAR
+     ============================================================ */
+  async publishProfile(cambiarClave){
+    if(!SECURE){ toast('El cifrado necesita https:// o localhost.', 'bad'); return; }
+    const primeraVez = this.mode !== 'perfil';
+    let clave = cambiarClave ? null : this.pass;
+
+    if(!clave){
+      clave = await this.newPasswordDialog({
+        title: cambiarClave ? 'Nueva clave de acceso' : 'Clave de acceso del perfil',
+        intro: 'Con esta clave se descifra la información en cualquier navegador y dispositivo. ' +
+               'No se guarda en ningún sitio y no puede recuperarse. Como el archivo es público, ' +
+               'usa una frase larga: mínimo 12 caracteres.',
+        min: 12,
+        submit: 'Cifrar y descargar'
+      });
+      if(clave === null) return;
+    }
+
+    toast('Cifrando el perfil…');
+    try{
+      const sobre = await Vault.encrypt(this.state, clave);
+      this.download(Profile.FILE, JSON.stringify(sobre, null, 2), 'application/json');
+
+      // Este navegador pasa a trabajar con el perfil cifrado
+      this.pass      = clave;
+      this.cacheKey  = await Vault.keyFor(sobre, clave);
+      this.cacheSalt = B64.to(sobre.salt);
+      this.cacheIter = sobre.iterations;
+      this.mode      = 'perfil';
+      this.published = sobre;
+      if(primeraVez) this.store.wipePlain();   // no queda nada legible
+      Profile.saveCache(sobre);
+      this.save();
+      this.render();
+      this.publishHelp(primeraVez);
+    }catch{
+      toast('No se pudo cifrar el perfil.', 'bad');
+    }
+  }
+
+  /* Instrucciones para dejar el archivo en el repositorio */
+  publishHelp(primeraVez){
+    Modal.open(`
+      <h2 id="dialogTitle">Perfil cifrado generado</h2>
+      <p class="muted">Se descargó <b>perfil.json</b>. Para que el resto de dispositivos lo vean,
+        colócalo en el repositorio y súbelo:</p>
+      <ol class="list" style="margin-top:10px">
+        <li><span>1. Mueve <b>perfil.json</b> desde Descargas a la carpeta del repositorio,
+          junto a <code>index.html</code>, sustituyendo el anterior.</span></li>
+        <li><span>2. Súbelo con GitHub Desktop, o desde una terminal:</span></li>
+      </ol>
+      <textarea class="input" rows="3" readonly style="font-family:ui-monospace,monospace;font-size:.85rem">git add perfil.json
+git commit -m "Actualizar perfil"
+git push</textarea>
+      <p class="hint">En uno o dos minutos, cualquier dispositivo que abra el sitio y escriba la clave
+        verá esta misma información.</p>
+      ${primeraVez ? `<div class="alert"><b>A partir de ahora la aplicación pedirá la clave siempre.</b><br>
+        <small>Este navegador ya no guarda nada legible: se borró la copia en claro y solo queda una
+        copia cifrada. Si olvidas la clave no hay forma de recuperar los datos.</small></div>` : ''}
+      <div class="modal-foot"><button class="btn" type="button" data-close>Entendido</button></div>`);
+  }
+
+  /* Descarta los cambios locales y vuelve a lo publicado */
+  async loadPublished(){
+    if(!this.published){ toast('Todavía no hay ningún perfil publicado.', 'bad'); return; }
+    const ok = await confirmDialog({
+      title:'Cargar el perfil publicado',
+      message:'Se sustituirán los datos de este navegador por los del perfil publicado. Los cambios que no hayas publicado se perderán.',
+      confirmText:'Cargar', danger:true });
+    if(!ok) return;
+    try{
+      const datos = await Vault.openWith(await Vault.keyFor(this.published, this.pass), this.published);
+      this.state = datos; this.migrate(); this.save(); this.render();
+      toast('Perfil publicado cargado.', 'good');
+    }catch{
+      toast('Tu clave actual no abre el perfil publicado. Puede que lo cifraran con otra.', 'bad', 8000);
+    }
+  }
+
   async exportBackup(){
     if(!SECURE){ toast('El respaldo cifrado necesita https:// o localhost.', 'bad'); return; }
     const pass = await this.newPasswordDialog();
@@ -2177,24 +2561,25 @@ class App{
   }
 
   /* Contraseña nueva, con confirmación y medidor de robustez */
-  newPasswordDialog(){
+  newPasswordDialog({title = 'Contraseña del respaldo', intro = '', min = 8, submit = 'Cifrar y descargar'} = {}){
+    const texto = intro || `El archivo se cifra con AES-GCM 256. Nadie podrá abrirlo sin esta contraseña,
+      y no existe forma de recuperarla: anótala en un lugar seguro.`;
     return new Promise(resolve => {
       Modal.open(`
-        <h2 id="dialogTitle">Contraseña del respaldo</h2>
-        <p class="muted">El archivo se cifra con AES-GCM 256. Nadie podrá abrirlo sin esta contraseña,
-          y no existe forma de recuperarla: anótala en un lugar seguro.</p>
+        <h2 id="dialogTitle">${escapeHtml(title)}</h2>
+        <p class="muted">${escapeHtml(texto)}</p>
         <form id="pwForm" novalidate>
           <label for="pw1">Contraseña</label>
           <input class="input" id="pw1" type="password" autocomplete="new-password">
           <div class="meter" id="pwMeter" aria-hidden="true"><i></i></div>
-          <p class="hint" id="pwHint">Mínimo 8 caracteres. Mezcla mayúsculas, minúsculas, números y símbolos.</p>
+          <p class="hint" id="pwHint">Mínimo ${min} caracteres. Mezcla mayúsculas, minúsculas, números y símbolos.</p>
           <label for="pw2" style="display:block;margin-top:12px">Repite la contraseña</label>
           <input class="input" id="pw2" type="password" autocomplete="new-password">
           <p class="err" id="pwErr" role="alert"></p>
         </form>
         <div class="modal-foot">
           <button class="btn secondary" type="button" data-close>Cancelar</button>
-          <button class="btn" type="submit" form="pwForm">Cifrar y descargar</button>
+          <button class="btn" type="submit" form="pwForm">${escapeHtml(submit)}</button>
         </div>`, { onOpen(){ document.querySelector('#dialog').classList.add('sm'); } });
 
       const p1 = document.getElementById('pw1'), meter = document.getElementById('pwMeter');
@@ -2202,19 +2587,19 @@ class App{
       p1.oninput = () => {
         const v = p1.value;
         let s = 0;
-        if(v.length >= 8) s++; if(v.length >= 12) s++;
+        if(v.length >= min) s++; if(v.length >= min + 6) s++;
         if(/[a-z]/.test(v) && /[A-Z]/.test(v)) s++;
         if(/\d/.test(v)) s++; if(/[^\w\s]/.test(v)) s++;
         meter.className = 'meter' + (s >= 4 ? ' ok' : s >= 3 ? ' mid' : '');
         meter.querySelector('i').style.width = Math.min(100, s * 20) + '%';
-        hint.textContent = v.length < 8 ? 'Mínimo 8 caracteres.'
+        hint.textContent = v.length < min ? `Mínimo ${min} caracteres.`
           : s >= 4 ? 'Contraseña robusta.' : 'Añade mayúsculas, números o símbolos para reforzarla.';
       };
       const cerrar = v => { document.querySelector('#dialog')?.classList.remove('sm'); Modal.close(); resolve(v); };
       document.getElementById('pwForm').onsubmit = e => {
         e.preventDefault();
         const err = document.getElementById('pwErr'), a = p1.value, b = document.getElementById('pw2').value;
-        if(a.length < 8){ err.textContent = 'Usa al menos 8 caracteres.'; p1.focus(); return; }
+        if(a.length < min){ err.textContent = `Usa al menos ${min} caracteres.`; p1.focus(); return; }
         if(a !== b){ err.textContent = 'Las contraseñas no coinciden.'; return; }
         cerrar(a);
       };
@@ -2305,6 +2690,7 @@ class App{
 }
 
 const app = new App();
+const ready = app.start();
 </script>
 </body>
 </html>

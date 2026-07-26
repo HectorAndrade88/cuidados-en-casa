@@ -40,6 +40,46 @@ La función se puede desactivar en Ajustes → Accesibilidad y avisos.
 
 ---
 
+## Perfil compartido entre dispositivos
+
+La aplicación tiene dos modos.
+
+**Modo local** (por defecto, hasta que publiques un perfil): los datos viven solo en el
+navegador donde los cargaste. Se protegen con un PIN opcional y se mueven a mano con el
+respaldo cifrado.
+
+**Modo perfil** (al pulsar *Crear perfil cifrado* en Ajustes): los datos se publican como
+`perfil.json`, un archivo cifrado con AES-GCM que se sube al repositorio junto al
+`index.html`. Cualquier dispositivo que abra la URL descarga ese archivo y **no muestra
+absolutamente nada** hasta que se escribe la clave de acceso, porque hasta ese momento no
+hay datos descifrados en memoria. El descifrado *es* la puerta: no es un candado dibujado
+delante de una información que ya está cargada.
+
+En este modo el navegador tampoco guarda nada legible: la copia local va cifrada con la
+misma clave, que existe únicamente en memoria mientras la sesión está abierta. Al bloquear
+—manualmente o por inactividad— la clave y los datos descifrados se descartan.
+
+### Publicar cambios
+
+Los cambios se guardan cifrados en tu navegador, pero los demás dispositivos no los ven
+hasta que republiques. En Ajustes → *Generar perfil.json* se descarga el archivo; después
+hay que reemplazarlo en el repositorio y subirlo. En Windows, `publicar-perfil.bat` hace
+las tres cosas: lo mueve desde Descargas, confirma y sube.
+
+Ajustes avisa cuando hay cambios sin publicar, y al entrar te advierte si el perfil del
+repositorio es más reciente que lo que tiene este navegador.
+
+### El riesgo que asumes
+
+`perfil.json` es público: cualquiera puede descargarlo. No podrá leerlo sin la clave, pero
+**sí puede intentar adivinarla sin conexión**, con todo el tiempo y el hardware que quiera.
+Eso es inherente a querer los mismos datos en todos los dispositivos sin servidor. Las
+defensas son PBKDF2-SHA256 con 600 000 iteraciones —que encarece muchísimo cada intento— y
+un mínimo obligatorio de 12 caracteres. Usa una frase larga, no una palabra. Si la
+información es especialmente sensible, valora quedarte en modo local.
+
+---
+
 ## Seguridad de la información
 
 Es una aplicación de datos de salud, así que conviene ser preciso sobre qué protege
@@ -47,22 +87,25 @@ cada mecanismo y qué no.
 
 ### Lo que protege
 
-**Bloqueo con PIN.** Se activa en Ajustes → Seguridad. Pide un PIN al abrir la aplicación,
-tras un tiempo de inactividad configurable (1, 5, 15 o 30 minutos) o al pulsar «Bloquear».
-El PIN **no se guarda**: se guarda su derivación PBKDF2-SHA256 con sal aleatoria y
-310 000 iteraciones. La comparación es en tiempo constante y, tras tres intentos fallidos,
-cada nuevo fallo impone una espera creciente (5 s, 15 s, 45 s… hasta 5 minutos).
-Mientras está bloqueada, la aplicación se retira del documento: no queda nada visible detrás.
+**La clave de acceso, en modo perfil.** Sin ella no se descifra ni se muestra nada, en
+ningún navegador ni dispositivo. Los datos están cifrados con AES-GCM 256 tanto en el
+archivo publicado como en la copia local. La clave no se guarda en ninguna parte.
+
+**Bloqueo con PIN, en modo local.** Se activa en Ajustes → Seguridad. Pide un PIN al abrir
+la aplicación, tras un tiempo de inactividad configurable (1, 5, 15 o 30 minutos) o al
+pulsar «Bloquear». El PIN **no se guarda**: se guarda su derivación PBKDF2-SHA256 con sal
+aleatoria y 600 000 iteraciones. La comparación es en tiempo constante y, tras tres intentos
+fallidos, cada nuevo fallo impone una espera creciente (5 s, 15 s, 45 s… hasta 5 minutos).
 
 **Respaldo cifrado.** El archivo que se descarga va siempre cifrado con **AES-GCM 256**,
-con clave derivada de tu contraseña mediante PBKDF2-SHA256 (310 000 iteraciones).
+con clave derivada de tu contraseña mediante PBKDF2-SHA256 (600 000 iteraciones).
 Cada exportación genera sal e IV nuevos. GCM añade autenticación: si alguien altera un
 solo byte del archivo, la restauración falla en vez de cargar datos corruptos.
 
-**Aislamiento de red.** Una `Content-Security-Policy` con `connect-src 'none'` impide
-cualquier conexión saliente, y `script-src` no admite scripts externos. Aunque se
-consiguiera inyectar código, no tendría por dónde sacar la información. No hay CDN,
-ni analítica, ni fuentes remotas: el archivo no carga nada de terceros.
+**Aislamiento de red.** Una `Content-Security-Policy` con `connect-src 'self'` limita las
+conexiones al propio sitio: la única petición que hace la aplicación es leer su `perfil.json`.
+No hay ningún destino externo al que se puedan enviar datos, `script-src` no admite scripts
+de fuera, y no hay CDN, analítica ni fuentes remotas.
 
 **Tratamiento de las fotos.** Solo se aceptan JPG, PNG, WEBP, GIF y BMP de hasta 8 MB.
 Los SVG se rechazan porque pueden contener scripts. Cada imagen se redibuja en un canvas
@@ -73,15 +116,17 @@ provocar peticiones a servidores externos.
 
 ### Lo que no protege
 
-Los datos guardados en el navegador **no están cifrados**. El PIN impide verlos desde la
-aplicación, pero alguien con acceso al equipo y conocimientos técnicos puede leerlos
-directamente desde el almacenamiento del navegador. En un equipo compartido, usa además
-el bloqueo de sesión del sistema operativo y una cuenta de usuario propia.
+**En modo local**, los datos guardados en el navegador no están cifrados. El PIN impide
+verlos desde la aplicación, pero alguien con acceso al equipo y conocimientos técnicos puede
+leerlos desde el almacenamiento del navegador. En un equipo compartido, usa además el
+bloqueo de sesión del sistema operativo y una cuenta de usuario propia. Publicar un perfil
+cifrado resuelve esto: a partir de ese momento no queda nada legible.
 
-La página publicada es pública: cualquiera puede abrir la URL. Lo que no es público son
-**tus datos**, que nunca salen de tu dispositivo. Cada navegador y cada dispositivo tiene
-su propia copia: no hay sincronización entre ellos. Para pasar la información de un equipo
-a otro se usa el respaldo cifrado.
+**En modo perfil**, el archivo publicado es susceptible de ataque sin conexión, como se
+explica arriba. La fortaleza del sistema es exactamente la de tu frase de acceso.
+
+En ambos casos, si olvidas la clave **no hay forma de recuperar los datos**. No existe
+ningún servidor que pueda restablecerla.
 
 ---
 
@@ -176,9 +221,11 @@ respaldo**: aunque van cifrados, no tienen por qué estar en un repositorio púb
 ## Archivos
 
 ```
-index.html   Aplicación completa (estilos, lógica y datos de ejemplo)
-404.html     Página de error de GitHub Pages
-.nojekyll    Desactiva el procesado de Jekyll
+index.html          Aplicación completa (estilos, lógica y datos de ejemplo)
+perfil.json         Datos cifrados, si has publicado un perfil (lo genera la app)
+publicar-perfil.bat Mueve perfil.json desde Descargas y lo sube al repositorio
+404.html            Página de error de GitHub Pages
+.nojekyll           Desactiva el procesado de Jekyll
 .gitignore   Excluye respaldos y archivos temporales
 README.md    Este documento
 publicar.bat Comandos de publicación para Windows

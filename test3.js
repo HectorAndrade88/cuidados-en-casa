@@ -11,7 +11,7 @@ const html = fs.readFileSync('index.html', 'utf8');
 let code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 code = code.replace('const app = new App();', 'globalThis.app = new App();');
 // Las clases y funciones son de ámbito léxico: se exponen para poder probarlas
-code += '\n;globalThis.__api = { Vault, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, escapeHtml, StorageManager, uuid, B64, SECURE };';
+code += '\n;globalThis.__api = { Vault, Profile, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, escapeHtml, StorageManager, uuid, B64, SECURE, ready };';
 
 let pass = 0, fail = 0;
 const ok  = (c, t) => { c ? (pass++, console.log('  OK   ' + t)) : (fail++, console.log('  FALLA ' + t)); };
@@ -76,7 +76,9 @@ const sandbox = {
   document, localStorage, crypto, console,
   TextEncoder, TextDecoder, btoa, atob, Uint8Array, Math, Date, JSON, Promise, Error, Object, Array, String, Number,
   setTimeout:(f, ms) => setTimeout(f, Math.min(ms || 0, 5)),
+  clearTimeout:t => clearTimeout(t),
   setInterval:() => 0, clearInterval:() => {},
+  fetch:undefined,   // sin perfil publicado: la app arranca en modo local
   Notification:undefined, Image:function(){},
   FileReader:function(){ this.readAsText = () => {}; this.readAsDataURL = () => {}; },
   Blob:function(){}, URL:{ createObjectURL:() => 'blob:x', revokeObjectURL(){} },
@@ -90,9 +92,11 @@ try{ vm.runInContext(code, sandbox); }
 catch(e){ console.log('ERROR al iniciar la aplicación:', e.message); process.exit(1); }
 
 const app = sandbox.app;
-const { Vault, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, uuid, B64, SECURE } = sandbox.__api;
+const { Vault, Profile, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, uuid, B64, SECURE, ready } = sandbox.__api;
 
 (async () => {
+  await ready;   // el arranque es asíncrono: primero se busca el perfil publicado
+
   sec('Arranque y compatibilidad con datos anteriores');
   ok(!!app, 'la aplicación arranca sin errores');
   ok(app.state.medications.length === 3, 'carga los medicamentos de ejemplo');
@@ -113,7 +117,7 @@ const { Vault, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, uuid, B64
   sec('Cifrado del respaldo (AES-GCM 256 + PBKDF2-SHA256)');
   const sobre = await Vault.encrypt({ secreto:'historia clínica', n:42 }, 'ClaveFuerte#2026');
   ok(sobre.cipher === 'AES-GCM-256' && sobre.kdf === 'PBKDF2-SHA256', 'declara el algoritmo empleado');
-  ok(sobre.iterations === 310000, 'usa 310 000 iteraciones de PBKDF2');
+  ok(sobre.iterations === 600000, 'usa 600 000 iteraciones de PBKDF2 (recomendación OWASP vigente)');
   ok(!JSON.stringify(sobre).includes('historia clínica'), 'el texto en claro no aparece en el archivo');
   ok(Vault.isEncrypted(sobre), 'reconoce su propio formato cifrado');
   ok(!Vault.isEncrypted({ patient:{}, medications:[] }), 'distingue un respaldo antiguo sin cifrar');
@@ -146,7 +150,7 @@ const { Vault, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, uuid, B64
   const cfg = pin.config();
   ok(pin.enabled(), 'el PIN queda activado');
   ok(!JSON.stringify(cfg).includes('4821'), 'el PIN no se guarda en claro en ningún campo');
-  ok(cfg.hash && cfg.salt && cfg.iterations === 310000, 'guarda huella, sal e iteraciones');
+  ok(cfg.hash && cfg.salt && cfg.iterations === 600000, 'guarda huella, sal e iteraciones');
   ok(await pin.verify('4821') === true, 'acepta el PIN correcto');
   ok(await pin.verify('1234') === false, 'rechaza un PIN incorrecto');
   ok(pin.equalTime('abc','abc') && !pin.equalTime('abc','abd'), 'compara en tiempo constante');
@@ -352,15 +356,77 @@ const { Vault, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, uuid, B64
   ok(!app.caregiversHTML().includes('wa.me'), 'sin celular no aparece el botón de WhatsApp');
   cuidadores.forEach((c, i) => c.phone = telefonos[i]);
 
+  sec('Perfil cifrado compartido entre dispositivos');
+  const CLAVE = 'frase larga de prueba 2026';
+  const sobrePerfil = await Vault.encrypt(app.state, CLAVE);
+  ok(Vault.isEncrypted(sobrePerfil), 'el perfil se genera como sobre cifrado');
+  ok(!JSON.stringify(sobrePerfil).includes(app.state.patient.name), 'el nombre del paciente no aparece en el archivo publicado');
+
+  // La clave se deriva UNA vez y se reutiliza: sellar debe ser instantáneo
+  const claveDerivada = await Vault.keyFor(sobrePerfil, CLAVE);
+  const sellado = await Vault.sealWith(claveDerivada, {x:1}, B64.to(sobrePerfil.salt), sobrePerfil.iterations);
+  ok((await Vault.openWith(claveDerivada, sellado)).x === 1, 'sellar y abrir con la clave ya derivada funciona');
+  ok(sellado.iv !== sobrePerfil.iv, 'cada sellado usa un IV nuevo');
+
+  ok(await Profile.published() === null, 'sin fetch disponible no se inventa ningún perfil publicado');
+
+  // Paso a modo perfil
+  const estadoOriginal = JSON.parse(JSON.stringify(app.state));
+  app.mode = 'perfil';
+  app.published = sobrePerfil;
+  app.pass = CLAVE;
+  app.cacheKey = claveDerivada;
+  app.cacheSalt = B64.to(sobrePerfil.salt);
+  app.cacheIter = sobrePerfil.iterations;
+  app.lockEl = document.getElementById('lock');
+
+  app.store.wipePlain();
+  ok(app.store.load() === null && app.store.snapshots().length === 0, 'al pasar a perfil se borra todo rastro legible');
+
+  app.save();
+  await new Promise(r => setTimeout(r, 80));
+  const copia = Profile.cache();
+  ok(copia && Vault.isEncrypted(copia), 'la copia local del navegador queda cifrada');
+  ok(!JSON.stringify(copia).includes(estadoOriginal.patient.name), 'la copia local no contiene texto legible');
+  ok(app.store.load() === null, 'en modo perfil no se escribe ninguna copia en claro');
+
+  const recuperado = await Vault.openWith(claveDerivada, copia);
+  ok(recuperado.patient.name === estadoOriginal.patient.name, 'la copia local se puede volver a abrir con la clave');
+  ok(!!recuperado.updatedAt, 'cada guardado deja marca de tiempo para comparar dispositivos');
+
+  ok(await app.openProfile('clave equivocada larga') === false, 'una clave incorrecta no abre nada');
+  ok(await app.openProfile(CLAVE) === true, 'la clave correcta descifra y abre la aplicación');
+  ok(app.state.patient.name === estadoOriginal.patient.name, 'tras abrir, los datos son los del perfil');
+  ok(app.locked === false, 'tras descifrar se levanta el bloqueo');
+
+  app.lock(true);
+  ok(app.state === null && app.pass === null && app.cacheKey === null,
+     'al bloquear se descartan de memoria la clave y los datos descifrados');
+  ok(app.locked === true, 'la puerta vuelve a estar cerrada');
+  ok(app.autolockMinutes() >= 0, 'el tiempo de autobloqueo se conoce antes de descifrar');
+
+  await app.openProfile(CLAVE);
+  ok(app.state !== null, 'se puede volver a entrar con la clave');
+  ok(Profile.when(sobrePerfil) > 0, 'el perfil publicado lleva fecha para detectar conflictos');
+
+  Profile.clearCache();
+  ok(Profile.cache() === null, 'la copia local cifrada se puede eliminar');
+  app.mode = 'local'; app.state = estadoOriginal; app.published = null;
+
   sec('Política de seguridad del sitio publicado');
-  ok(/connect-src 'none'/.test(html), 'CSP: bloquea toda conexión saliente');
+  ok(/connect-src 'self'/.test(html) && !/connect-src[^;]*https?:/.test(html),
+     'CSP: solo se permite leer del propio sitio, ningún destino externo');
   ok(/object-src 'none'/.test(html) && /frame-ancestors 'none'/.test(html), 'CSP: sin objetos incrustados ni iframes ajenos');
   ok(/script-src 'unsafe-inline'/.test(html) && !/script-src[^"]*https?:/.test(html), 'CSP: no admite scripts externos');
   ok(/base-uri 'none'/.test(html) && /form-action 'none'/.test(html), 'CSP: sin reescritura de base ni envío de formularios fuera');
   ok(/noindex/.test(html), 'pide a los buscadores no indexar la página');
   ok(!/<script[^>]+src=/.test(html), 'no carga ningún recurso de terceros');
   ok(!/(src|href)\s*=\s*["']https?:/i.test(html), 'ningún recurso se carga desde una URL externa');
-  ok(!/\bfetch\s*\(|XMLHttpRequest|navigator\.sendBeacon|new WebSocket/.test(html), 'el código no hace ninguna petición de red');
+  ok(!/XMLHttpRequest|navigator\.sendBeacon|new WebSocket|\.src\s*=\s*['"`]https?:/.test(html),
+     'no hay canales alternativos de red: ni XHR, ni beacons, ni websockets');
+  const fetches = html.match(/fetch\s*\(/g) || [];
+  ok(fetches.length === 1 && /fetch\(this\.FILE/.test(html),
+     'la única petición de red es la lectura del propio perfil.json');
   ok(!/googleapis|cdn|analytics|gtag/i.test(html), 'no hay CDN ni analítica de terceros');
 
   console.log(`\nResultado: ${pass} correctas, ${fail} fallidas\n`);
