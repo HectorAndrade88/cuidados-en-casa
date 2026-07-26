@@ -13,8 +13,30 @@ dependencias: todo cabe en un archivo `index.html` que se publica como sitio est
 | **Hoy** | Portada con la foto del próximo medicamento, progreso del día, alertas de inventario y equipo de cuidado |
 | **Tratamiento** | Medicamentos en tabla o en galería de fotos, ficha detallada e inventario |
 | **Registro** | Síntomas, dosis de rescate e historial exportable a CSV |
-| **Cuidadores** | Cada cuidador con varios medicamentos a cargo |
+| **Cuidadores** | Cada cuidador con varios medicamentos a cargo y su celular de WhatsApp |
 | **Ajustes** | Paciente, accesibilidad, seguridad y respaldo |
+
+---
+
+## Aviso por WhatsApp
+
+Cada cuidador tiene un campo de **celular**. Al registrar la administración de cualquier
+medicamento aparece un aviso con el mensaje ya redactado —paciente, medicamento, dosis, vía,
+hora programada, hora real y responsable— y un botón por destinatario. Se ofrece primero a los
+cuidadores responsables de ese medicamento y después al resto del equipo; nunca a quien acaba
+de administrarlo, que ya lo sabe. El mensaje es editable antes de enviarlo y queda constancia
+en el historial de a quién se avisó.
+
+El envío usa el enlace oficial de «clic para chatear» de WhatsApp (`https://wa.me/NUMERO?text=…`):
+**no hay API, ni token, ni credenciales, ni servidor intermediario**. El enlace abre WhatsApp
+con el texto escrito y el envío lo confirma la persona. Nada se manda de forma automática.
+
+Los números se normalizan al formato internacional que exige el enlace: si escribes los 10
+dígitos de un celular colombiano se les antepone el 57, y se admiten también los formatos
+`+57 300…`, `0057 300…` o con paréntesis y guiones. Para otro país basta con anteponer su
+indicativo. El campo es opcional, pero si se escribe algo inservible el formulario lo rechaza.
+
+La función se puede desactivar en Ajustes → Accesibilidad y avisos.
 
 ---
 

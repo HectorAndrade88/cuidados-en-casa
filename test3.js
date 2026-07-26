@@ -11,7 +11,7 @@ const html = fs.readFileSync('index.html', 'utf8');
 let code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 code = code.replace('const app = new App();', 'globalThis.app = new App();');
 // Las clases y funciones son de ámbito léxico: se exponen para poder probarlas
-code += '\n;globalThis.__api = { Vault, PinLock, ImageTools, safeImage, SIN_FOTO, escapeHtml, StorageManager, uuid, B64, SECURE };';
+code += '\n;globalThis.__api = { Vault, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, escapeHtml, StorageManager, uuid, B64, SECURE };';
 
 let pass = 0, fail = 0;
 const ok  = (c, t) => { c ? (pass++, console.log('  OK   ' + t)) : (fail++, console.log('  FALLA ' + t)); };
@@ -90,7 +90,7 @@ try{ vm.runInContext(code, sandbox); }
 catch(e){ console.log('ERROR al iniciar la aplicación:', e.message); process.exit(1); }
 
 const app = sandbox.app;
-const { Vault, PinLock, ImageTools, safeImage, SIN_FOTO, uuid, B64, SECURE } = sandbox.__api;
+const { Vault, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, uuid, B64, SECURE } = sandbox.__api;
 
 (async () => {
   sec('Arranque y compatibilidad con datos anteriores');
@@ -279,6 +279,78 @@ const { Vault, PinLock, ImageTools, safeImage, SIN_FOTO, uuid, B64, SECURE } = s
   ok(sinFallo, 'todas las vistas y diálogos se generan sin errores');
   ok(app.medDetail('inexistente') === undefined, 'un identificador desconocido no rompe la ficha');
   ok(app.formatBytes(500) === '500 B' && app.formatBytes(2 * 1024 * 1024) === '2.00 MB', 'muestra los tamaños en unidades legibles');
+
+  sec('Celular: normalización de números');
+  ok(Phone.intl('300 123 4567') === '573001234567', 'un celular colombiano de 10 dígitos recibe el indicativo 57');
+  ok(Phone.intl('+57 300 123 4567') === '573001234567', 'acepta el número ya escrito con +57');
+  ok(Phone.intl('0057 300 123 4567') === '573001234567', 'acepta el prefijo internacional 00');
+  ok(Phone.intl('(300) 123-4567') === '573001234567', 'ignora paréntesis, guiones y espacios');
+  ok(Phone.intl('+52 55 1234 5678') === '525512345678', 'respeta el indicativo de otro país');
+  ok(Phone.intl('') === '' && Phone.intl(null) === '', 'un campo vacío no genera número');
+  ok(Phone.valid('300 123 4567') && !Phone.valid('123'), 'distingue números utilizables de los que no lo son');
+  ok(!Phone.valid('1234567890123456789'), 'rechaza números más largos de lo que permite E.164');
+  ok(Phone.pretty('3001234567') === '+573001234567', 'muestra el número en formato internacional');
+
+  sec('Enlace de WhatsApp (sin API ni credenciales)');
+  const enlace = Phone.waLink('300 123 4567', 'Hola\nsegunda línea & signo=1');
+  ok(enlace.startsWith('https://wa.me/573001234567?text='), 'usa el enlace oficial wa.me con el número normalizado');
+  ok(enlace.includes('%0A'), 'codifica los saltos de línea del mensaje');
+  ok(enlace.includes('%26') && enlace.includes('%3D'), 'codifica los signos & e = que romperían la URL');
+  ok(!/api[_-]?key|access[_-]?token|client[_-]?secret|Bearer\s|Authorization\s*:/i.test(html),
+     'no hay ninguna credencial ni token en el archivo');
+  ok(!/graph\.facebook|api\.whatsapp\.com\/send\?.*token/i.test(html), 'no se usa la API de WhatsApp Business');
+
+  sec('Aviso tras administrar una dosis');
+  const medAviso = app.state.medications[0];
+  const cuidadores = app.state.caregivers;
+  cuidadores[0].name = 'Ana Rodríguez'; cuidadores[0].phone = '300 123 4567';
+  cuidadores[0].medIds = [medAviso.id];
+  cuidadores[1].name = 'Enfermería'; cuidadores[1].phone = '3019998877'; cuidadores[1].medIds = [];
+
+  const agendaItem = { time:'08:00', actual:new Date('2026-07-26T13:05:00Z').toISOString() };
+  const mensaje = app.waMessage(medAviso, agendaItem, 'Ana Rodríguez');
+  ok(mensaje.includes(app.state.patient.name), 'el mensaje nombra al paciente');
+  ok(mensaje.includes(medAviso.name) && mensaje.includes(medAviso.dose), 'el mensaje incluye medicamento y dosis');
+  ok(mensaje.includes('08:00'), 'el mensaje incluye la hora programada');
+  ok(mensaje.includes('Ana Rodríguez'), 'el mensaje indica quién administró');
+
+  const dest = app.waRecipients(medAviso, 'Ana Rodríguez');
+  ok(!dest.asignados.concat(dest.otros).some(c => c.name === 'Ana Rodríguez'), 'no se avisa a quien acaba de administrar');
+  ok(dest.otros.some(c => c.name === 'Enfermería'), 'se ofrece avisar al resto del equipo');
+  const destSinTel = app.waRecipients(medAviso, 'Nadie');
+  ok(destSinTel.asignados.every(c => Phone.valid(c.phone)), 'solo aparecen cuidadores con celular utilizable');
+
+  cuidadores[1].medIds = [medAviso.id];
+  const dest2 = app.waRecipients(medAviso, 'Ana Rodríguez');
+  ok(dest2.asignados.some(c => c.name === 'Enfermería'), 'los responsables del medicamento se listan primero');
+
+  let abrio = false;
+  const openReal = Modal.open;
+  Modal.open = function(h){ abrio = true; return openReal.call(this, h); };
+  app.state.settings.whatsapp = false;
+  app.whatsappNotice(agendaItem, medAviso, 'Ana Rodríguez');
+  ok(abrio === false, 'con el aviso desactivado en Ajustes no se muestra nada');
+  app.state.settings.whatsapp = true;
+  app.whatsappNotice(agendaItem, medAviso, 'Ana Rodríguez');
+  ok(abrio === true, 'con el aviso activado se ofrece la lista de destinatarios');
+  abrio = false;
+  const sinNadie = app.state.caregivers;
+  app.state.caregivers = [];
+  app.whatsappNotice(agendaItem, medAviso, 'Ana Rodríguez');
+  ok(abrio === false, 'sin cuidadores con celular no se interrumpe al usuario');
+  app.state.caregivers = sinNadie;
+  Modal.open = openReal;
+
+  sec('Escapado en los enlaces de WhatsApp');
+  cuidadores[0].name = 'Ana" onmouseover="alert(1)';
+  const tarjetas = app.caregiversHTML();
+  ok(!tarjetas.includes('onmouseover="alert'), 'un nombre malicioso no puede romper el atributo href');
+  ok(tarjetas.includes('wa.me/573001234567'), 'la tarjeta del cuidador ofrece el botón de WhatsApp');
+  cuidadores[0].name = 'Ana Rodríguez';
+  const telefonos = cuidadores.map(c => c.phone);
+  cuidadores.forEach(c => c.phone = '');
+  ok(!app.caregiversHTML().includes('wa.me'), 'sin celular no aparece el botón de WhatsApp');
+  cuidadores.forEach((c, i) => c.phone = telefonos[i]);
 
   sec('Política de seguridad del sitio publicado');
   ok(/connect-src 'none'/.test(html), 'CSP: bloquea toda conexión saliente');

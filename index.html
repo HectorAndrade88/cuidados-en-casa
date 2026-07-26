@@ -198,6 +198,10 @@
   .btn:hover{ filter:brightness(.95); }
   .btn.secondary{ background:var(--primary-soft); color:var(--primary-soft-ink); }
   .btn.danger{ background:var(--bad-bg); color:var(--bad); border-color:transparent; }
+  /* Botón de WhatsApp: verde de marca oscurecido para cumplir contraste AA */
+  .btn.wa{ background:#0b6b5f; color:#fff; }
+  .btn.wa:hover{ filter:brightness(1.12); }
+  body.high .btn.wa{ background:#00453c; border-color:#000; }
   .btn.small{ min-height:36px; padding:7px 11px; font-size:.85rem; }
   body.large .btn.small{ min-height:44px; }
   body.high .btn{ border-color:#000; }
@@ -683,6 +687,35 @@ class ImageTools{
 }
 
 /* ------------------------------------------------------------
+   Phone · Celulares y avisos por WhatsApp
+   Se usa el enlace oficial «clic para chatear» (wa.me): no hay
+   API, ni token, ni credenciales, ni servidor intermediario.
+   El enlace abre WhatsApp con el mensaje ya escrito y es la
+   persona quien pulsa enviar, así que nada sale del dispositivo
+   sin una acción explícita.
+   ------------------------------------------------------------ */
+class Phone{
+  static PAIS = '57';                                  // Colombia por defecto
+  static digits(v){ return String(v ?? '').replace(/\D/g, ''); }
+
+  /* Formato internacional sin signos, como exige wa.me (E.164 sin «+») */
+  static intl(v){
+    let d = this.digits(v);
+    if(!d) return '';
+    if(d.startsWith('00')) d = d.slice(2);             // 0057 300…
+    if(d.length === 10 && d.startsWith('3')) d = this.PAIS + d;  // celular colombiano
+    return d;
+  }
+  static valid(v){ const d = this.intl(v); return d.length >= 8 && d.length <= 15; }
+  static pretty(v){ const d = this.intl(v); return d ? '+' + d : ''; }
+
+  /* Enlace de WhatsApp con el mensaje precargado */
+  static waLink(numero, texto){
+    return 'https://wa.me/' + this.intl(numero) + '?text=' + encodeURIComponent(texto || '');
+  }
+}
+
+/* ------------------------------------------------------------
    StorageManager · Persistencia local y respaldo automático
    Tres niveles, todos dentro del navegador (sin servidor):
      1. Estado actual.
@@ -928,7 +961,7 @@ class App{
     this.state.agenda   = this.state.agenda   || [];
     this.state.settings = Object.assign(
       { dark:false, large:false, high:false, sound:false, notifications:false,
-        autolock:5, medView:'tabla', lastBackup:'' },
+        autolock:5, medView:'tabla', lastBackup:'', whatsapp:true },
       this.state.settings || {});
   }
 
@@ -1349,7 +1382,7 @@ class App{
           <span class="avatar" aria-hidden="true">${escapeHtml(this.initials(c.name))}</span>
           <div>
             <b>${escapeHtml(c.name)}</b>
-            <div class="muted">${escapeHtml(c.role)}${c.phone?' · '+escapeHtml(c.phone):''}</div>
+            <div class="muted">${escapeHtml(c.role)}${Phone.valid(c.phone) ? ' · ' + escapeHtml(Phone.pretty(c.phone)) : ''}</div>
           </div>
           <span class="pill" style="margin-left:auto">${meds.length} med.</span>
         </div>
@@ -1359,6 +1392,11 @@ class App{
         </div>
         ${c.notes ? `<p class="muted" style="margin:12px 0 0">${escapeHtml(c.notes)}</p>` : ''}
         <div class="actions" style="margin-top:14px">
+          ${Phone.valid(c.phone)
+            ? `<a class="btn wa small" target="_blank" rel="noopener noreferrer"
+                  href="${escapeHtml(Phone.waLink(c.phone, `Hola ${c.name}, te escribo por el cuidado de ${this.state.patient.name}.`))}"
+                  aria-label="Escribir a ${escapeHtml(c.name)} por WhatsApp">WhatsApp</a>`
+            : ''}
           <button class="btn secondary small" type="button" data-action="editCaregiver" data-id="${c.id}">Editar</button>
           <button class="btn danger small" type="button" data-action="delCaregiver" data-id="${c.id}">Eliminar</button>
         </div>
@@ -1371,7 +1409,7 @@ class App{
 
   settingsHTML(){
     const s = this.state.settings, p = this.state.patient;
-    const toggles = [['dark','Modo oscuro'],['large','Fuente y botones grandes'],['high','Alto contraste'],['sound','Sonido al llegar la hora'],['notifications','Notificaciones del navegador']];
+    const toggles = [['dark','Modo oscuro'],['large','Fuente y botones grandes'],['high','Alto contraste'],['sound','Sonido al llegar la hora'],['notifications','Notificaciones del navegador'],['whatsapp','Ofrecer aviso por WhatsApp al administrar']];
     return this.title('Configuración', 'Preferencias, paciente y respaldo.') + `
       <div class="settings grid">
         <div class="card">
@@ -1386,6 +1424,10 @@ class App{
         <div class="card">
           <b>Accesibilidad y avisos</b>
           ${toggles.map(([k,label]) => `<label class="switch"><span>${label}</span><input type="checkbox" data-setting="${k}" ${s[k]?'checked':''}></label>`).join('')}
+          <p class="muted" style="font-size:.82rem;margin-top:12px">
+            El aviso de WhatsApp usa un enlace normal con el mensaje escrito: no hay API, ni credenciales,
+            ni envío automático. Se abre la aplicación y tú confirmas el envío. Solo aparece para los
+            cuidadores que tengan celular guardado.</p>
         </div>
         ${this.securityHTML()}
         ${this.backupHTML()}
@@ -1559,6 +1601,7 @@ class App{
   async dose(action, id){
     const a = this.state.agenda.find(x=>x.id===id); if(!a) return;
     const m = this.med(a.medId);
+    let aviso = null;
     if(action==='admin'){
       const who = await this.pickResponsible(m);
       if(who===null) return;
@@ -1566,6 +1609,7 @@ class App{
       m.stock = Math.max(0, m.stock-1);
       new HistoryManager().add(this.state,'medicación',`${m.name} administrado`,{responsible:who});
       toast(`${m.name} administrado.`, 'good');
+      aviso = { a, m, who };   // el aviso se ofrece después de repintar
     } else if(action==='skip'){
       const motivo = await promptDialog({title:'Omitir dosis', label:'Motivo de la omisión', type:'textarea', required:false, placeholder:'Opcional'});
       if(motivo===null) return;
@@ -1583,6 +1627,96 @@ class App{
       a.status='pending'; a.actual=''; a.responsible='';
     }
     this.save(); this.render();
+    if(aviso) this.whatsappNotice(aviso.a, aviso.m, aviso.who);
+  }
+
+  /* ============================================================
+     AVISO POR WHATSAPP TRAS ADMINISTRAR UNA DOSIS
+     Sin API ni credenciales: se construye un enlace wa.me con el
+     mensaje ya escrito. Avisa a los cuidadores de ese medicamento
+     que tengan celular, excepto a quien acaba de administrarla.
+     ============================================================ */
+  waMessage(m, a, quien){
+    const p = this.state.patient;
+    const momento = a.actual
+      ? new Date(a.actual).toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'})
+      : new Date().toLocaleString('es-CO');
+    return [
+      'Cuida · Registro de medicación',
+      `Paciente: ${p.name}`,
+      `Medicamento: ${m.name} ${m.dose} ${m.unit} (${m.route})`,
+      `Hora programada: ${a.time}`,
+      `Administrado: ${momento}`,
+      `Responsable: ${quien}`,
+      m.notes ? `Nota: ${m.notes}` : ''
+    ].filter(Boolean).join('\n');
+  }
+
+  /* Destinatarios: primero los responsables del medicamento */
+  waRecipients(m, quien){
+    const conTel = c => Phone.valid(c.phone) && c.name !== quien;
+    const asignados = this.caregiversFor(m.id).filter(conTel);
+    const otros = this.state.caregivers.filter(c => conTel(c) && !asignados.includes(c));
+    return { asignados, otros };
+  }
+
+  whatsappNotice(a, m, quien){
+    if(this.state.settings.whatsapp === false) return;
+    const { asignados, otros } = this.waRecipients(m, quien);
+    const lista = asignados.concat(otros);
+    if(!lista.length) return;
+
+    const texto = this.waMessage(m, a, quien);
+    const fila = (c, esResponsable) => `
+      <li>
+        <span class="car-line">
+          <span class="avatar sm" aria-hidden="true">${escapeHtml(this.initials(c.name))}</span>
+          <span>
+            <b>${escapeHtml(c.name)}</b>
+            ${esResponsable ? '<span class="pill" style="margin-left:6px">A cargo</span>' : ''}
+            <br><small class="muted">${escapeHtml(c.role)} · ${escapeHtml(Phone.pretty(c.phone))}</small>
+          </span>
+        </span>
+        <a class="btn wa small" target="_blank" rel="noopener noreferrer"
+           data-wa="${escapeHtml(c.phone)}" data-name="${escapeHtml(c.name)}"
+           href="${escapeHtml(Phone.waLink(c.phone, texto))}"
+           aria-label="Avisar a ${escapeHtml(c.name)} por WhatsApp">Enviar</a>
+      </li>`;
+
+    Modal.open(`
+      <h2 id="dialogTitle">Dosis registrada</h2>
+      <p class="muted">${escapeHtml(m.name)} ${escapeHtml(m.dose)} ${escapeHtml(m.unit)} ·
+        ${escapeHtml(a.time)} · registrado por ${escapeHtml(quien)}</p>
+
+      <label for="waText" style="display:block;margin-top:14px">Mensaje que se enviará</label>
+      <textarea class="input" id="waText" rows="7">${escapeHtml(texto)}</textarea>
+      <p class="hint">Se abre WhatsApp con el mensaje ya escrito; el envío lo confirmas tú desde la
+        aplicación. Cuida no manda nada por su cuenta ni usa ningún servicio externo.</p>
+
+      <div style="margin-top:18px"><b>Avisar a</b>
+        <ul class="list" id="waList">
+          ${asignados.map(c => fila(c, true)).join('')}
+          ${otros.map(c => fila(c, false)).join('')}
+        </ul>
+      </div>
+      <div class="modal-foot">
+        <button class="btn secondary" type="button" data-close>Ahora no</button>
+      </div>`);
+
+    // El mensaje es editable: los enlaces se rehacen al escribir
+    const caja = document.getElementById('waText');
+    const sincronizar = () => Modal.dialog.querySelectorAll('[data-wa]').forEach(el => {
+      el.href = Phone.waLink(el.dataset.wa, caja.value);
+    });
+    caja.oninput = sincronizar;
+
+    // Se deja constancia en el historial de a quién se avisó
+    Modal.dialog.querySelectorAll('[data-wa]').forEach(el => el.addEventListener('click', () => {
+      new HistoryManager().add(this.state, 'aviso', `${m.name}: aviso de administración enviado a ${el.dataset.name}`);
+      this.save();
+      toast(`WhatsApp abierto para avisar a ${el.dataset.name}.`, 'good');
+      setTimeout(() => { Modal.close(); this.render(); }, 300);
+    }));
   }
 
   async resetData(){
@@ -1785,7 +1919,13 @@ class App{
       <form id="carForm" class="form" novalidate>
         <label>Nombre <span class="req">*</span><input class="input" name="name" required autocomplete="name" value="${escapeHtml(c.name)}"><p class="err" data-err="name" role="alert"></p></label>
         <label>Rol<select class="input" name="role">${roles.map(r=>`<option ${c.role===r?'selected':''}>${r}</option>`).join('')}</select></label>
-        <label>Teléfono<input class="input" name="phone" type="tel" autocomplete="tel" value="${escapeHtml(c.phone)}"></label>
+        <label>Celular (WhatsApp)
+          <input class="input" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+                 placeholder="300 123 4567" value="${escapeHtml(c.phone)}">
+          <span class="hint">Recibirá el aviso al administrar sus medicamentos. En Colombia bastan los
+            10 dígitos; para otro país antepón el indicativo: +52 55 1234 5678.</span>
+          <p class="err" data-err="phone" role="alert"></p>
+        </label>
         <label class="full">Observaciones<textarea class="input" name="notes">${escapeHtml(c.notes)}</textarea></label>
         <fieldset class="full checks">
           <legend>Medicamentos a cargo <span class="hint">(selecciona uno o varios)</span></legend>
@@ -1800,11 +1940,22 @@ class App{
     form.onsubmit = e => {
       e.preventDefault();
       const name = form.elements.name.value.trim();
-      const box = form.querySelector('[data-err="name"]');
-      if(!name){ box.textContent = 'El nombre es obligatorio.'; form.elements.name.setAttribute('aria-invalid','true'); form.elements.name.focus(); return; }
+      const tel  = form.elements.phone.value.trim();
+      const err  = (campo, msg) => {
+        const caja = form.querySelector(`[data-err="${campo}"]`);
+        if(caja) caja.textContent = msg;
+        form.elements[campo].setAttribute('aria-invalid', msg ? 'true' : 'false');
+      };
+      err('name',''); err('phone','');
+      if(!name){ err('name','El nombre es obligatorio.'); form.elements.name.focus(); return; }
+      // El celular es opcional, pero si se escribe debe poder usarse en WhatsApp
+      if(tel && !Phone.valid(tel)){
+        err('phone','Número no válido. Escribe los 10 dígitos del celular o el número con indicativo del país.');
+        form.elements.phone.focus(); return;
+      }
       c.name = name;
       c.role = form.elements.role.value;
-      c.phone = form.elements.phone.value.trim();
+      c.phone = tel;
       c.notes = form.elements.notes.value.trim();
       c.medIds = [...form.querySelectorAll('input[name="med"]:checked')].map(i=>i.value);
       if(!edit) this.state.caregivers.push(c);
