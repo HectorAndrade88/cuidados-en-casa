@@ -11,7 +11,7 @@ const html = fs.readFileSync('index.html', 'utf8');
 let code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 code = code.replace('const app = new App();', 'globalThis.app = new App();');
 // Las clases y funciones son de ámbito léxico: se exponen para poder probarlas
-code += '\n;globalThis.__api = { Vault, Profile, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, escapeHtml, StorageManager, uuid, B64, SECURE, ready };';
+code += '\n;globalThis.__api = { Vault, Profile, PinLock, ImageTools, Phone, Modal, MedicationSchedule, Medication, Inventory, isoDate, addDays, daysBetween, safeImage, SIN_FOTO, escapeHtml, StorageManager, uuid, B64, SECURE, ready };';
 
 let pass = 0, fail = 0;
 const ok  = (c, t) => { c ? (pass++, console.log('  OK   ' + t)) : (fail++, console.log('  FALLA ' + t)); };
@@ -92,7 +92,8 @@ try{ vm.runInContext(code, sandbox); }
 catch(e){ console.log('ERROR al iniciar la aplicación:', e.message); process.exit(1); }
 
 const app = sandbox.app;
-const { Vault, Profile, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, uuid, B64, SECURE, ready } = sandbox.__api;
+const { Vault, Profile, PinLock, ImageTools, Phone, Modal, MedicationSchedule, Medication, Inventory,
+        isoDate, addDays, daysBetween, safeImage, SIN_FOTO, uuid, B64, SECURE, ready } = sandbox.__api;
 
 (async () => {
   await ready;   // el arranque es asíncrono: primero se busca el perfil publicado
@@ -355,6 +356,89 @@ const { Vault, Profile, PinLock, ImageTools, Phone, Modal, safeImage, SIN_FOTO, 
   cuidadores.forEach(c => c.phone = '');
   ok(!app.caregiversHTML().includes('wa.me'), 'sin celular no aparece el botón de WhatsApp');
   cuidadores.forEach((c, i) => c.phone = telefonos[i]);
+
+  sec('Pautas: cada cuántos días toca');
+  const MS = MedicationSchedule;
+  const med = o => new Medication(Object.assign({name:'X', times:['08:00'], startDate:'2026-07-01'}, o));
+
+  const diaria = med({});
+  ok(MS.appliesOn(diaria, '2026-07-01') && MS.appliesOn(diaria, '2026-07-02'), 'la pauta diaria toca todos los días');
+
+  const cada3 = med({pattern:'cada', everyDays:3});
+  ok(MS.appliesOn(cada3, '2026-07-01'), 'cada 3 días toca el día de inicio');
+  ok(!MS.appliesOn(cada3, '2026-07-02') && !MS.appliesOn(cada3, '2026-07-03'), 'los dos días intermedios no toca');
+  ok(MS.appliesOn(cada3, '2026-07-04'), 'vuelve a tocar al tercer día');
+  ok(MS.appliesOn(cada3, '2026-07-31'), 'el ciclo se mantiene un mes después');
+  ok(!MS.appliesOn(cada3, '2026-06-28'), 'antes de la fecha de inicio no toca');
+
+  const cada2 = med({pattern:'cada', everyDays:2});
+  ok(MS.appliesOn(cada2, '2026-07-03') && !MS.appliesOn(cada2, '2026-07-04'), 'un día sí y otro no');
+
+  // 2026-07-06 es lunes
+  const semanal = med({pattern:'semana', weekdays:[1,3,5]});
+  ok(MS.appliesOn(semanal, '2026-07-06'), 'la pauta semanal toca el lunes');
+  ok(!MS.appliesOn(semanal, '2026-07-07'), 'no toca el martes');
+  ok(MS.appliesOn(semanal, '2026-07-08') && MS.appliesOn(semanal, '2026-07-10'), 'toca miércoles y viernes');
+  ok(!MS.appliesOn(semanal, '2026-07-11'), 'no toca el sábado');
+
+  const conFin = med({pattern:'cada', everyDays:3, endDate:'2026-07-10'});
+  ok(MS.appliesOn(conFin, '2026-07-10'), 'el último día del tratamiento aún toca');
+  ok(!MS.appliesOn(conFin, '2026-07-13'), 'después del fin del tratamiento ya no se programa');
+
+  const inactivo = med({active:false});
+  ok(!MS.appliesOn(inactivo, '2026-07-01'), 'un medicamento inactivo no se programa');
+
+  sec('Pautas: descripción y próxima fecha');
+  ok(MS.describe(diaria) === 'Todos los días', 'describe la pauta diaria');
+  ok(MS.describe(cada3) === 'Cada 3 días', 'describe el intervalo de tres días');
+  ok(MS.describe(cada2) === 'Un día sí y otro no', 'describe el día por medio en lenguaje natural');
+  ok(MS.describe(semanal).includes('lunes') && MS.describe(semanal).includes('viernes'), 'describe los días de la semana');
+  ok(MS.describe(conFin).includes('hasta el 2026-07-10'), 'indica el fin del tratamiento');
+
+  ok(MS.nextDate(cada3, '2026-07-02') === '2026-07-04', 'calcula la próxima fecha de una pauta cada 3 días');
+  ok(MS.nextDate(semanal, '2026-07-07') === '2026-07-08', 'calcula el próximo día de la semana marcado');
+  ok(MS.nextDate(conFin, '2026-07-11') === null, 'no hay próxima vez tras el fin del tratamiento');
+
+  sec('Pautas: agenda del día e inventario');
+  const tresMeds = [ med({name:'A', times:['08:00','20:00']}),
+                     med({name:'B', pattern:'cada', everyDays:3, times:['09:00']}),
+                     med({name:'C', pattern:'semana', weekdays:[1], times:['10:00']}) ];
+  const agenda1 = MS.forDate(tresMeds, '2026-07-01');   // miércoles, día de inicio
+  ok(agenda1.length === 3, 'la agenda incluye solo lo que toca ese día');
+  ok(agenda1[0].time === '08:00' && agenda1.at(-1).time === '20:00', 'la agenda sale ordenada por hora');
+  const agenda2 = MS.forDate(tresMeds, '2026-07-02');
+  ok(agenda2.length === 2, 'al día siguiente desaparece la pauta de cada 3 días');
+  ok(MS.forDate(tresMeds, '2026-07-06').some(a => a.time === '10:00'), 'el lunes aparece la pauta semanal');
+
+  const previa = MS.forDate(tresMeds, '2026-07-01');
+  previa[0].status = 'administered'; previa[0].responsible = 'Ana';
+  const fusionada = MS.merge(previa, MS.forDate(tresMeds, '2026-07-01'));
+  ok(fusionada.filter(a => a.status === 'administered').length === 1,
+     'al editar un medicamento se conservan las dosis ya registradas');
+
+  ok(MS.dosesPerDay(med({times:['08:00','20:00']})) === 2, 'dos tomas diarias son dos dosis al día');
+  ok(MS.dosesPerDay(med({pattern:'cada', everyDays:3, times:['08:00']})) - 1/3 < 1e-9, 'cada 3 días equivale a un tercio de dosis diaria');
+  ok(Math.abs(MS.dosesPerDay(med({pattern:'semana', weekdays:[1,3,5], times:['08:00']})) - 3/7) < 1e-9, 'tres días por semana son 3/7 de dosis diaria');
+  ok(Inventory.days(med({pattern:'cada', everyDays:3, times:['08:00'], stock:10})) === 30,
+     'el inventario dura el triple con una pauta de cada 3 días');
+  ok(Inventory.days(med({times:['08:00','20:00'], stock:10})) === 5, 'con dos tomas al día el stock rinde la mitad');
+
+  sec('Pautas: compatibilidad y cambio de día');
+  const antiguo = new Medication({name:'Viejo', times:['08:00']});
+  ok(antiguo.pattern === 'diaria', 'un medicamento sin pauta se considera diario');
+  ok(antiguo.startDate === isoDate(), 'se le asigna la fecha de hoy como inicio');
+  ok(new Medication({everyDays:999}).everyDays === 60, 'el intervalo se limita a un máximo razonable');
+  ok(new Medication({pattern:'inventado'}).pattern === 'diaria', 'una pauta desconocida cae en diaria');
+  ok(new Medication({weekdays:'lunes'}).weekdays.length === 0, 'unos días de la semana corruptos no rompen nada');
+
+  app.state.agendaDate = '2000-01-01';
+  ok(app.syncAgenda() === true, 'al cambiar el día se detecta que la agenda es vieja');
+  ok(app.state.agendaDate === isoDate(), 'la agenda queda fechada hoy');
+  ok(app.syncAgenda() === false, 'dentro del mismo día no se vuelve a recrear');
+
+  ok(addDays('2026-07-30', 3) === '2026-08-02', 'sumar días cruza el cambio de mes');
+  ok(addDays('2026-12-31', 1) === '2027-01-01', 'y también el cambio de año');
+  ok(daysBetween('2026-02-27', '2026-03-01') === 2, 'contar días respeta la duración real del mes');
 
   sec('Perfil cifrado compartido entre dispositivos');
   const CLAVE = 'frase larga de prueba 2026';

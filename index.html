@@ -506,6 +506,30 @@ function escapeHtml(v){
   ));
 }
 
+/* ------------------------------------------------------------
+   Fechas en horario LOCAL (YYYY-MM-DD)
+   No se usa toISOString(): en Colombia (UTC−5) devolvería el día
+   siguiente a partir de las 7 de la tarde, y la agenda saltaría
+   de día antes de tiempo.
+   ------------------------------------------------------------ */
+function isoDate(d = new Date()){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function parseISO(s){
+  const [y, m, d] = String(s || '').split('-').map(Number);
+  return new Date(y || 1970, (m || 1) - 1, d || 1);
+}
+function daysBetween(desde, hasta){
+  return Math.round((parseISO(hasta) - parseISO(desde)) / 864e5);
+}
+function addDays(iso, n){
+  const d = parseISO(iso);
+  return isoDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n));
+}
+function prettyDate(iso){
+  return parseISO(iso).toLocaleDateString('es-CO', {weekday:'long', day:'numeric', month:'long'});
+}
+
 /* Imagen de reserva cuando un medicamento no tiene foto */
 const SIN_FOTO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" fill="#eaf0ff"/>' +
@@ -819,7 +843,7 @@ class StorageManager{
   }
   /* Copia diaria: se renueva como mucho una vez por hora */
   snapshot(data){
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = isoDate();
     const list = this.snapshots();
     const i = list.findIndex(s => s.day === hoy);
     if(i === 0 && Date.now() - new Date(list[0].at).getTime() < 3600000) return;
@@ -847,8 +871,20 @@ class Medication{
   constructor(o={}){ Object.assign(this,{
     id:uuid(), name:'', activeIngredient:'', dose:'', unit:'mg',
     presentation:'Comprimido', route:'Oral', times:[], indication:'', notes:'',
-    color:'#3a5bd0', active:true, stock:0, minStock:5, expiry:'', photo:'', lab:'', nationalCode:''
-  }, o); }
+    color:'#3a5bd0', active:true, stock:0, minStock:5, expiry:'', photo:'', lab:'', nationalCode:'',
+    /* --- Pauta: no todos los tratamientos son diarios --- */
+    pattern:'diaria',   // 'diaria' | 'cada' (cada N días) | 'semana' (días fijos)
+    everyDays:2,        // intervalo para la pauta 'cada'
+    weekdays:[],        // 0 = domingo … 6 = sábado, para la pauta 'semana'
+    startDate:'',       // ancla del ciclo: desde aquí se cuentan los intervalos
+    endDate:''          // fin del tratamiento (opcional)
+  }, o);
+    if(!Array.isArray(this.times)) this.times = [];
+    if(!Array.isArray(this.weekdays)) this.weekdays = [];
+    if(!['diaria','cada','semana'].includes(this.pattern)) this.pattern = 'diaria';
+    if(!this.startDate) this.startDate = isoDate();
+    this.everyDays = Math.min(60, Math.max(1, +this.everyDays || 1));
+  }
 }
 /* Cuidador/a: puede tener asignados VARIOS medicamentos (medIds) */
 class Caregiver{
@@ -858,15 +894,87 @@ class Caregiver{
 }
 
 /* --- Utilidades de negocio --- */
+/* ------------------------------------------------------------
+   MedicationSchedule · Qué toca y qué día
+   Resuelve las tres pautas habituales en domicilio:
+     · diaria  → todos los días
+     · cada N  → «cada tres días», contando desde la fecha de inicio
+     · semana  → días fijos (lunes, miércoles y viernes)
+   Con inicio de pauta y fin de tratamiento opcionales.
+   ------------------------------------------------------------ */
 class MedicationSchedule{
-  static today(meds){
-    return meds.filter(m=>m.active)
-      .flatMap(m => m.times.map(time => ({ id:uuid(), medId:m.id, time, status:'pending', actual:'', responsible:'', note:'' })))
-      .sort((a,b)=>a.time.localeCompare(b.time));
+  static DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+
+  /* ¿Le corresponde a este medicamento en esta fecha? */
+  static appliesOn(m, fecha = isoDate()){
+    if(!m || !m.active) return false;
+    if(m.startDate && fecha < m.startDate) return false;   // aún no empieza
+    if(m.endDate   && fecha > m.endDate)   return false;   // ya terminó
+    if(m.pattern === 'semana')
+      return (m.weekdays || []).includes(parseISO(fecha).getDay());
+    if(m.pattern === 'cada'){
+      const n = Math.max(1, +m.everyDays || 1);
+      const dif = daysBetween(m.startDate || fecha, fecha);
+      return dif >= 0 && dif % n === 0;
+    }
+    return true;   // diaria
+  }
+
+  static forDate(meds, fecha = isoDate()){
+    return (meds || []).filter(m => this.appliesOn(m, fecha))
+      .flatMap(m => m.times.map(time => ({
+        id:uuid(), medId:m.id, time, status:'pending', actual:'', responsible:'', note:'' })))
+      .sort((a,b) => a.time.localeCompare(b.time));
+  }
+  static today(meds){ return this.forDate(meds, isoDate()); }
+
+  /* Conserva lo ya registrado al recalcular la agenda tras editar un medicamento */
+  static merge(anterior, nueva){
+    return nueva.map(n =>
+      (anterior || []).find(a => a.medId === n.medId && a.time === n.time) || n);
+  }
+
+  /* Próxima fecha en la que toca, buscando hacia delante */
+  static nextDate(m, desde = isoDate(), limite = 400){
+    for(let i = 0; i <= limite; i++){
+      const f = addDays(desde, i);
+      if(m.endDate && f > m.endDate) return null;
+      if(this.appliesOn(m, f)) return f;
+    }
+    return null;
+  }
+
+  /* Descripción legible de la pauta */
+  static describe(m){
+    let t = 'Todos los días';
+    if(m.pattern === 'cada'){
+      const n = Math.max(1, +m.everyDays || 1);
+      t = n === 1 ? 'Todos los días' : n === 2 ? 'Un día sí y otro no' : `Cada ${n} días`;
+    }else if(m.pattern === 'semana'){
+      const l = [...(m.weekdays || [])].sort((a,b)=>a-b).map(i => this.DIAS[i]);
+      t = !l.length ? 'Sin días seleccionados'
+        : l.length === 1 ? `Los ${l[0]}s`
+        : `Los ${l.slice(0,-1).join(', ')} y ${l.at(-1)}`;
+    }
+    if(m.endDate) t += ` · hasta el ${m.endDate}`;
+    return t;
+  }
+
+  /* Dosis medias por día: necesario para saber cuánto dura el inventario */
+  static dosesPerDay(m){
+    const n = (m.times || []).length;
+    if(!n) return 0;
+    if(m.pattern === 'cada')  return n / Math.max(1, +m.everyDays || 1);
+    if(m.pattern === 'semana') return n * ((m.weekdays || []).length) / 7;
+    return n;
   }
 }
 class Inventory{
-  static days(m){ return m.times.length ? Math.floor(m.stock/m.times.length) : 0; }
+  /* Días de tratamiento que cubre el stock, según la pauta real */
+  static days(m){
+    const porDia = MedicationSchedule.dosesPerDay(m);
+    return porDia ? Math.floor(m.stock / porDia) : 0;
+  }
   static level(m){ return m.stock<=m.minStock ? 'low' : 'ok'; }
 }
 
@@ -1000,8 +1108,16 @@ class App{
     this.mode   = 'local';   // 'local' = solo este navegador · 'perfil' = perfil cifrado publicado
     this.pass   = null;      // clave de acceso: solo en memoria, nunca se guarda
     this.page   = 'dashboard';
-    // Reloj + refresco del panel cada 30 s
-    setInterval(()=>{ this.updateClock(); this.renderIfDashboard(); }, 30000);
+    // Reloj, cambio de día y refresco del panel cada 30 s
+    setInterval(() => {
+      this.updateClock();
+      if(this.state && this.syncAgenda()){
+        this.save(); this.render();
+        toast('Comenzó un nuevo día: la agenda se actualizó con lo que toca hoy.', 'good', 7000);
+      }else{
+        this.renderIfDashboard();
+      }
+    }, 30000);
     this.updateClock();
     // Importación de respaldo
     document.getElementById('importFile').onchange = e => this.handleImport(e);
@@ -1050,6 +1166,17 @@ class App{
       { dark:false, large:false, high:false, sound:false, notifications:false,
         autolock:5, medView:'tabla', lastBackup:'', whatsapp:true },
       this.state.settings || {});
+    this.syncAgenda();
+  }
+
+  /* La agenda pertenece a un día concreto. Si se abre la aplicación otro
+     día —o cambia la fecha con ella abierta— se recrea con lo que toca. */
+  syncAgenda(){
+    const hoy = isoDate();
+    if(this.state.agendaDate === hoy) return false;
+    this.state.agendaDate = hoy;
+    this.state.agenda = MedicationSchedule.today(this.state.medications);
+    return true;
   }
 
   /* ============================================================
@@ -1400,6 +1527,16 @@ class App{
     return this.state.agenda.find(a=>a.status==='pending' && a.time>=now)
         || this.state.agenda.find(a=>a.status==='pending');
   }
+  /* Primer medicamento que toca a partir de mañana (para las pautas no diarias) */
+  nextScheduled(){
+    const manana = addDays(isoDate(), 1);
+    let mejor = null;
+    for(const m of this.state.medications.filter(x => x.active && x.times.length)){
+      const f = MedicationSchedule.nextDate(m, manana);
+      if(f && (!mejor || f < mejor.date)) mejor = { date:f, med:m };
+    }
+    return mejor;
+  }
 
   /* --- Vistas --- */
   homeHTML(){ return this.dashboardHTML() + this.section('Agenda de hoy', this.agendaHTML(false),
@@ -1413,7 +1550,8 @@ class App{
     const total = this.state.agenda.length, done = this.todayDone();
     const alerts = this.state.medications.filter(x => Inventory.level(x)==='low' ||
       (x.expiry && new Date(x.expiry) < new Date(Date.now()+90*864e5)));
-    const symToday = this.state.symptoms.filter(x => x.date.slice(0,10)===new Date().toISOString().slice(0,10)).length;
+    // Comparación en fecha local: con UTC, a partir de las 7 p. m. contaba mal
+    const symToday = this.state.symptoms.filter(x => isoDate(new Date(x.date)) === isoDate()).length;
     const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
     return this.title('Buenos días, ' + this.state.patient.name.split(' ')[0], this.state.patient.diagnosis) + `
       <div class="grid stats">
@@ -1439,7 +1577,15 @@ class App{
                      </div>
                    </div>
                  </div>`
-                 : '<div class="empty">No hay medicación pendiente.</div>'}
+                 : (() => {
+                     const sig = this.nextScheduled();
+                     return `<div class="empty">
+                       ${this.state.agenda.length ? 'Todas las dosis de hoy están registradas.'
+                                                  : 'Hoy no corresponde ningún medicamento.'}
+                       ${sig ? `<div style="margin-top:10px">Próxima: <b>${escapeHtml(sig.med.name)}</b>
+                                  el ${escapeHtml(prettyDate(sig.date))} a las ${escapeHtml(sig.med.times[0] || '—')}</div>` : ''}
+                     </div>`;
+                   })()}
         </div>
         <div class="card">
           <b>Progreso del día</b>
@@ -1498,7 +1644,8 @@ class App{
     const rows = this.state.medications.map(m => `<tr>
       <td data-label="Medicamento"><div class="med-row"><img class="thumb" src="${safeImage(m.photo)}" alt=""><div><b>${escapeHtml(m.name)}</b><br><small class="muted">${escapeHtml(m.activeIngredient||'Sin principio activo')}</small>${this.caregiversFor(m.id).length?`<div class="chips mini">${this.caregiversFor(m.id).map(c=>`<span class="chip">${escapeHtml(c.name)}</span>`).join('')}</div>`:''}</div></div></td>
       <td data-label="Dosis">${escapeHtml(m.dose)} ${escapeHtml(m.unit)}</td>
-      <td data-label="Horarios">${m.times.map(escapeHtml).join(', ')||'—'}</td>
+      <td data-label="Pauta">${m.times.map(escapeHtml).join(', ')||'—'}<br>
+        <small class="muted">${escapeHtml(MedicationSchedule.describe(m))}</small></td>
       <td data-label="Inventario">${m.stock} <small class="muted">(${Inventory.days(m)} días)</small></td>
       <td data-label="Estado"><span class="pill ${Inventory.level(m)==='low'?'bad':''}">${m.active?'Activo':'Inactivo'}</span></td>
       <td data-label="Acción"><div class="actions"><button class="btn secondary small" type="button" data-action="viewMed" data-id="${m.id}">Ver</button><button class="btn secondary small" type="button" data-action="editMed" data-id="${m.id}">Editar</button></div></td>
@@ -1513,10 +1660,11 @@ class App{
           <div>
             <b>${escapeHtml(m.name)}</b>
             <div class="muted">${escapeHtml(m.dose)} ${escapeHtml(m.unit)} · ${escapeHtml(m.presentation)}</div>
+            <div class="muted" style="font-size:.82rem">${escapeHtml(MedicationSchedule.describe(m))}${m.times.length?' · '+escapeHtml(m.times.join(', ')):''}</div>
           </div>
           <div>
             <span class="pill ${Inventory.level(m)==='low'?'bad':''}">${Inventory.level(m)==='low'?'Stock bajo':'Stock correcto'}</span>
-            <span class="pill">${m.times.length||0}/día</span>
+            <span class="pill">${MedicationSchedule.appliesOn(m) ? 'Hoy toca' : 'Hoy no toca'}</span>
           </div>
           ${cuidadores.length ? `<div class="chips mini">${cuidadores.map(c=>`<span class="chip">${escapeHtml(c.name)}</span>`).join('')}</div>` : ''}
           <div class="actions">
@@ -1532,7 +1680,7 @@ class App{
       ? `<div class="grid gallery" id="medRows">${galeria || '<div class="card empty">Aún no hay medicamentos.</div>'}</div>`
       : `<div class="card table-wrap"><table class="table">
           <caption class="sr-only">Lista de medicamentos</caption>
-          <thead><tr><th>Medicamento</th><th>Dosis</th><th>Horarios</th><th>Inventario</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+          <thead><tr><th>Medicamento</th><th>Dosis</th><th>Pauta</th><th>Inventario</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
           <tbody id="medRows">${rows}</tbody>
         </table></div>`;
 
@@ -1553,7 +1701,8 @@ class App{
     const rows = this.state.medications.map(m => `<tr>
       <td data-label="Medicamento"><div class="med-row"><img class="thumb" src="${safeImage(m.photo)}" alt=""><b>${escapeHtml(m.name)}</b></div></td>
       <td data-label="Restante"><b>${m.stock}</b> unidades</td>
-      <td data-label="Consumo">${m.times.length||0}/día</td>
+      <td data-label="Consumo">${(Math.round(MedicationSchedule.dosesPerDay(m)*100)/100)}/día<br>
+        <small class="muted">${escapeHtml(MedicationSchedule.describe(m))}</small></td>
       <td data-label="Días">${Inventory.days(m)} días</td>
       <td data-label="Vencimiento">${escapeHtml(m.expiry)||'—'}</td>
       <td data-label="Alerta">${Inventory.level(m)==='low' ? '<span class="pill bad">Stock bajo</span>' : '<span class="pill">Correcto</span>'}</td>
@@ -1584,13 +1733,9 @@ class App{
   }
 
   historyHTML(){
-    const merged = this.state.history.concat(
-      this.state.agenda.filter(a=>a.status!=='pending').map(a => ({
-        date:a.actual||new Date().toISOString(),
-        text:`${this.med(a.medId).name}: ${a.status==='administered'?'administrado':'omitido/pospuesto'}`,
-        type:'agenda'
-      }))
-    ).sort((a,b)=>b.date.localeCompare(a.date));
+    // Cada dosis ya queda registrada al administrarla u omitirla: no se
+    // vuelve a mezclar la agenda, que duplicaba todas las entradas del día.
+    const merged = [...this.state.history].sort((a,b)=>b.date.localeCompare(a.date));
     const rows = merged.map(x =>
       `<li><div><b>${escapeHtml(x.text)}</b><br><small class="muted">${new Date(x.date).toLocaleString('es-CO')}</small></div><span class="pill">${escapeHtml(x.type)}</span></li>`
     ).join('') || '<li class="empty">No hay eventos aún.</li>';
@@ -1896,7 +2041,11 @@ class App{
       case 'reset': return this.resetData();
       case 'resetAgenda':
         this.state.agenda = MedicationSchedule.today(this.state.medications);
-        this.save(); this.render(); return toast('Agenda recreada.', 'good');
+        this.state.agendaDate = isoDate();
+        this.save(); this.render();
+        return toast(this.state.agenda.length
+          ? 'Agenda recreada con lo que toca hoy.'
+          : 'Hoy no corresponde ningún medicamento según las pautas.', 'good');
     }
   }
 
@@ -2042,6 +2191,34 @@ class App{
         <label>Presentación<input class="input" name="presentation" value="${escapeHtml(m.presentation)}"></label>
         <label>Vía<input class="input" name="route" value="${escapeHtml(m.route)}"></label>
         <label class="full">Horarios <span class="req">*</span><input class="input" name="times" required value="${escapeHtml(m.times.join(', '))}"><span class="hint">Formato HH:MM separados por coma. Ej: 08:00, 20:00</span><p class="err" data-err="times" role="alert"></p></label>
+
+        <label class="full">Cada cuánto <span class="req">*</span>
+          <select class="input" name="pattern" id="patternSel">
+            <option value="diaria" ${m.pattern==='diaria'?'selected':''}>Todos los días</option>
+            <option value="cada"   ${m.pattern==='cada'  ?'selected':''}>Cada cierto número de días</option>
+            <option value="semana" ${m.pattern==='semana'?'selected':''}>Días fijos de la semana</option>
+          </select>
+        </label>
+        <label id="everyWrap">Intervalo en días
+          <input class="input" name="everyDays" type="number" min="1" max="60" inputmode="numeric" value="${escapeHtml(m.everyDays)}">
+          <span class="hint">2 = un día sí y otro no · 3 = cada tres días.</span>
+          <p class="err" data-err="everyDays" role="alert"></p>
+        </label>
+        <fieldset class="full checks" id="weekWrap">
+          <legend>Días de la semana <span class="hint">(marca uno o varios)</span></legend>
+          ${MedicationSchedule.DIAS.map((d,i) => `
+            <label class="check"><input type="checkbox" name="weekday" value="${i}" ${m.weekdays.includes(i)?'checked':''}>${d.charAt(0).toUpperCase()+d.slice(1)}</label>`).join('')}
+          <p class="err" data-err="weekdays" role="alert" style="width:100%"></p>
+        </fieldset>
+        <label>Inicio de la pauta
+          <input class="input" name="startDate" type="date" value="${escapeHtml(m.startDate)}">
+          <span class="hint">Desde esta fecha se cuentan los intervalos.</span>
+        </label>
+        <label>Fin del tratamiento
+          <input class="input" name="endDate" type="date" value="${escapeHtml(m.endDate)}">
+          <span class="hint">Opcional. Después ya no se programa.</span>
+          <p class="err" data-err="endDate" role="alert"></p>
+        </label>
         <label>Stock<input class="input" name="stock" type="number" min="0" inputmode="numeric" value="${escapeHtml(m.stock)}"></label>
         <label>Stock mínimo<input class="input" name="minStock" type="number" min="0" inputmode="numeric" value="${escapeHtml(m.minStock)}"></label>
         <label>Vencimiento<input class="input" name="expiry" type="date" value="${escapeHtml(m.expiry)}"></label>
@@ -2063,6 +2240,14 @@ class App{
         <button class="btn secondary" type="button" data-close>Cancelar</button>
         <button class="btn" type="submit" form="medForm" id="saveMed">Guardar medicamento</button>
       </div>`, { onOpen:() => {
+        // Solo se muestran los campos que la pauta elegida necesita
+        const sel = document.getElementById('patternSel');
+        const syncPauta = () => {
+          document.getElementById('everyWrap').hidden = sel.value !== 'cada';
+          document.getElementById('weekWrap').hidden  = sel.value !== 'semana';
+        };
+        sel.onchange = syncPauta; syncPauta();
+
         const drop  = document.getElementById('drop');
         const box   = document.getElementById('imgState');
         const errEl = document.getElementById('photoErr');
@@ -2101,27 +2286,52 @@ class App{
     const showErr = (name, msg) => {
       const field = form.elements[name], box = form.querySelector(`[data-err="${name}"]`);
       if(box) box.textContent = msg;
-      field.setAttribute('aria-invalid', msg ? 'true' : 'false');
+      if(field && field.setAttribute) field.setAttribute('aria-invalid', msg ? 'true' : 'false');
     };
     form.onsubmit = e => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(form));
+      delete f.weekday;               // las casillas se leen aparte
       let firstBad = null;
-      ['name','dose','times'].forEach(k => showErr(k,''));
+      ['name','dose','times','everyDays','weekdays','endDate'].forEach(k => showErr(k,''));
+
       if(!f.name.trim()){ showErr('name','El nombre es obligatorio.'); firstBad ??= 'name'; }
       if(!f.dose.trim()){ showErr('dose','La dosis es obligatoria.'); firstBad ??= 'dose'; }
       const times = f.times.split(',').map(x=>x.trim()).filter(Boolean);
       const validTimes = times.length && times.every(x => RE_TIME.test(x));
       if(!validTimes){ showErr('times','Use horarios válidos, por ejemplo: 08:00, 20:00.'); firstBad ??= 'times'; }
-      if(firstBad){ form.elements[firstBad].focus(); return; }
+
+      // --- Validación de la pauta ---
+      const pattern  = ['diaria','cada','semana'].includes(f.pattern) ? f.pattern : 'diaria';
+      const weekdays = [...form.querySelectorAll('input[name="weekday"]:checked')].map(i => +i.value);
+      const cada     = Math.min(60, Math.max(1, +f.everyDays || 1));
+      if(pattern === 'cada' && !(+f.everyDays >= 1 && +f.everyDays <= 60)){
+        showErr('everyDays','Indica un intervalo entre 1 y 60 días.'); firstBad ??= 'everyDays';
+      }
+      if(pattern === 'semana' && !weekdays.length){
+        showErr('weekdays','Marca al menos un día de la semana.'); firstBad ??= 'pattern';
+      }
+      if(f.endDate && f.startDate && f.endDate < f.startDate){
+        showErr('endDate','El fin del tratamiento no puede ser anterior al inicio.'); firstBad ??= 'endDate';
+      }
+      if(firstBad){ form.elements[firstBad]?.focus?.(); return; }
 
       Object.assign(m, f);
       m.times = times; m.stock = +f.stock || 0; m.minStock = +f.minStock || 0; m.photo = image;
+      m.pattern   = pattern;
+      m.everyDays = cada;
+      m.weekdays  = weekdays;
+      m.startDate = f.startDate || isoDate();
+      m.endDate   = f.endDate || '';
       if(!edit) this.state.medications.push(m);
-      this.state.agenda = MedicationSchedule.today(this.state.medications);
-      new HistoryManager().add(this.state,'configuración',`${m.name} ${edit?'actualizado':'creado'}`);
+      // Se recalcula la agenda conservando las dosis ya registradas hoy
+      this.state.agenda = MedicationSchedule.merge(
+        this.state.agenda, MedicationSchedule.today(this.state.medications));
+      this.state.agendaDate = isoDate();
+      new HistoryManager().add(this.state,'configuración',
+        `${m.name} ${edit?'actualizado':'creado'} · ${MedicationSchedule.describe(m)}`);
       this.save(); Modal.close(); this.render();
-      toast(`${m.name} ${edit?'actualizado':'creado'}.`, 'good');
+      toast(`${m.name} ${edit?'actualizado':'creado'}. ${MedicationSchedule.describe(m)}.`, 'good', 6000);
     };
   }
 
@@ -2355,6 +2565,12 @@ class App{
             ${fila('Presentación', m.presentation)}
             ${fila('Vía', m.route)}
             ${fila('Horarios', m.times.join(', '))}
+            <dt>Pauta</dt><dd>${escapeHtml(MedicationSchedule.describe(m))}
+              ${MedicationSchedule.appliesOn(m) ? '<span class="pill">Hoy toca</span>'
+                : `<span class="pill warn">Hoy no toca</span>`}</dd>
+            ${fila('Inicio de la pauta', m.startDate)}
+            ${(() => { const p = MedicationSchedule.nextDate(m, addDays(isoDate(),1));
+                 return p ? `<dt>Próxima vez</dt><dd>${escapeHtml(prettyDate(p))}</dd>` : ''; })()}
             ${fila('Indicación', m.indication)}
             ${fila('Laboratorio', m.lab)}
             ${fila('Código nacional', m.nationalCode)}

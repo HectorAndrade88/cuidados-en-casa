@@ -18,6 +18,31 @@ dependencias: todo cabe en un archivo `index.html` que se publica como sitio est
 
 ---
 
+## Pautas de administración
+
+No todo tratamiento es diario. Cada medicamento define **cada cuánto** se administra:
+
+| Pauta | Para qué sirve | Ejemplo |
+|---|---|---|
+| **Todos los días** | Lo habitual | Morfina cada 8 horas |
+| **Cada N días** | Intervalos fijos | Cada 3 días, o un día sí y otro no |
+| **Días fijos de la semana** | Días concretos | Lunes, miércoles y viernes |
+
+Las pautas por intervalo se cuentan desde la **fecha de inicio**, que marca el punto de
+partida del ciclo: si empiezas un cada-3-días el 1 de julio, toca el 1, el 4, el 7… También
+puede fijarse un **fin de tratamiento** opcional, tras el cual el medicamento deja de
+programarse solo.
+
+La agenda pertenece a un día concreto y **se recrea sola al cambiar de fecha**, incluso con
+la aplicación abierta. Al editar un medicamento se recalcula conservando las dosis que ya
+hubieras registrado ese día. Si hoy no corresponde nada, el panel de inicio dice cuál es la
+próxima y cuándo.
+
+El cálculo de duración del inventario tiene en cuenta la pauta: diez comprimidos con una
+toma diaria duran diez días, pero con una pauta de cada tres días duran treinta.
+
+---
+
 ## Aviso por WhatsApp
 
 Cada cuidador tiene un campo de **celular**. Al registrar la administración de cualquier
