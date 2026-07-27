@@ -1,8 +1,26 @@
 # Cuida · Seguimiento domiciliario
 
-Aplicación de una sola página para el seguimiento de medicación, síntomas y cuidadores
-en cuidados paliativos domiciliarios. Sin servidor, sin base de datos externa y sin
+Aplicación de una sola página para el seguimiento en casa de la medicación, los síntomas y
+el equipo de cuidado de **una persona**. Sin servidor, sin base de datos externa y sin
 dependencias: todo cabe en un archivo `index.html` que se publica como sitio estático.
+
+No presupone ninguna enfermedad, especialidad ni edad: sirve igual para un tratamiento
+crónico, una convalecencia o el acompañamiento de un mayor en casa.
+
+---
+
+## Un único paciente
+
+Toda la información gira alrededor de una sola persona: los medicamentos, la agenda, los
+síntomas, los cuidadores y el historial le pertenecen. Su nombre, edad y motivo de
+seguimiento se registran en Ajustes y se ven en la **barra superior de todas las secciones**,
+donde además funcionan como acceso directo para editarlos.
+
+La aplicación **arranca vacía**: no inventa pacientes ni tratamientos. El panel de inicio
+muestra unos primeros pasos —registrar al paciente, añadir el primer medicamento, añadir
+cuidadores— que desaparecen al completarlos. Para explorar la aplicación llena antes de
+usarla, en Ajustes hay un botón que carga datos de ejemplo claramente identificados como
+tales, y otro que lo vacía todo.
 
 ---
 

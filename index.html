@@ -17,7 +17,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#3a5bd0">
-  <meta name="description" content="Cuida: seguimiento domiciliario de medicación y síntomas para cuidados paliativos.">
+  <meta name="description" content="Cuida: seguimiento en casa de la medicación, los síntomas y el equipo de cuidado de una persona.">
   <title>Cuida · Seguimiento domiciliario</title>
   <style>
   /* ============================================================
@@ -152,7 +152,16 @@
     background:var(--surface); border-bottom:1px solid var(--line);
     position:sticky; top:0; z-index:3;
   }
-  .top .who{ font-weight:600; }
+  .top .who{ font-weight:600; min-width:0; }
+  /* Paciente en la barra superior: es un botón, pero se lee como texto */
+  .linklike{
+    background:none; border:0; padding:4px 0; margin:0; cursor:pointer;
+    font:inherit; font-weight:600; color:var(--ink); text-align:left;
+    text-decoration:underline; text-decoration-color:var(--line);
+    text-underline-offset:4px; min-height:auto;
+  }
+  .linklike:hover{ text-decoration-color:var(--primary); }
+  .linklike.warnlike{ color:var(--warn); }
   .clock{ color:var(--muted); font-size:.9rem; }
   .clock strong{ color:var(--ink); font-size:1.05rem; margin-left:6px; }
   .content{ padding:26px; max-width:1240px; width:100%; margin:0 auto; }
@@ -441,7 +450,7 @@
 
     <div class="main">
       <header class="top">
-        <div class="who" id="topPatient">Seguimiento domiciliario</div>
+        <div class="who" id="topPatient"></div>
         <div style="display:flex;align-items:center;gap:14px">
           <button class="btn secondary small" type="button" id="topLock" hidden>Bloquear</button>
           <div class="clock">Hoy <strong id="clock">--:--</strong></div>
@@ -809,12 +818,24 @@ class Phone{
    ------------------------------------------------------------ */
 class StorageManager{
   constructor(){
-    this.key  = 'cuida-paliativos-v1';
+    this.key  = 'cuida-datos-v1';
+    this.keyAntigua = 'cuida-paliativos-v1';   // nombre anterior, se migra al vuelo
     this.prev = 'cuida-copia-previa';
     this.snapKey = 'cuida-copias';
     this.maxSnaps = 5;
   }
-  load(){ try{ return JSON.parse(localStorage.getItem(this.key)); }catch{ return null; } }
+  load(){
+    try{
+      const actual = localStorage.getItem(this.key);
+      if(actual) return JSON.parse(actual);
+      // Datos guardados con el nombre anterior: se recuperan y se reubican
+      const viejo = localStorage.getItem(this.keyAntigua);
+      if(!viejo) return null;
+      localStorage.setItem(this.key, viejo);
+      localStorage.removeItem(this.keyAntigua);
+      return JSON.parse(viejo);
+    }catch{ return null; }
+  }
   previous(){ try{ return JSON.parse(localStorage.getItem(this.prev)); }catch{ return null; } }
   snapshots(){ try{ return JSON.parse(localStorage.getItem(this.snapKey)) || []; }catch{ return []; } }
   /* Borra todo rastro legible: se usa al pasar al perfil cifrado */
@@ -864,8 +885,15 @@ class StorageManager{
 }
 
 /* --- Modelos de dominio --- */
+/* Un único paciente: es el centro de toda la aplicación.
+   Sin datos inventados: se rellena en Ajustes al empezar. */
 class Patient{
-  constructor(o={}){ Object.assign(this,{name:'María González',age:68,diagnosis:'Cáncer de pulmón · cuidados paliativos'}, o); }
+  constructor(o={}){ Object.assign(this,{name:'', age:'', diagnosis:''}, o); }
+  get registrado(){ return !!String(this.name || '').trim(); }
+  get resumen(){
+    return [this.name, this.age ? `${this.age} años` : '', this.diagnosis]
+      .filter(x => String(x || '').trim()).join(' · ');
+  }
 }
 class Medication{
   constructor(o={}){ Object.assign(this,{
@@ -1419,8 +1447,19 @@ class App{
       'bad', 9000), 1500);
   }
 
-  /* Datos de ejemplo iniciales */
+  /* Estado inicial: vacío y sin suponer nada sobre el paciente ni su
+     situación. La aplicación no inventa datos; se configura al empezar. */
   seed(){
+    return {
+      patient:new Patient(), medications:[], agenda:[], agendaDate:isoDate(),
+      caregivers:[], symptoms:[], rescues:[], history:[],
+      settings:{dark:false, large:false, high:false, sound:false, notifications:false}
+    };
+  }
+
+  /* Datos de ejemplo, solo si se piden expresamente desde Ajustes.
+     Sirven para ver cómo queda la aplicación llena antes de usarla. */
+  demoData(){
     const svg = (bg,label) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" rx="18" fill="${bg}"/><rect x="42" y="28" width="96" height="124" rx="12" fill="white"/><path d="M62 60h56M62 78h40" stroke="${bg}" stroke-width="7" stroke-linecap="round"/><text x="90" y="120" text-anchor="middle" font-family="Arial" font-size="15" fill="${bg}">${label}</text></svg>`);
     const meds = [
@@ -1432,12 +1471,15 @@ class App{
     ];
     // Cuidadores de ejemplo, cada uno con VARIOS medicamentos asignados
     const caregivers = [
-      new Caregiver({name:'Ana Rodríguez', role:'Familiar', phone:'300 123 4567', medIds:meds.map(m=>m.id), notes:'Cuidadora principal · turno de día.'}),
-      new Caregiver({name:'Enfermería domiciliaria', role:'Enfermero/a', phone:'', medIds:[meds[0].id, meds[2].id], notes:'Control de morfina y antieméticos.'})
+      new Caregiver({name:'Cuidadora de ejemplo', role:'Familiar', phone:'300 123 4567', medIds:meds.map(m=>m.id), notes:'Cuidadora principal · turno de día.'}),
+      new Caregiver({name:'Enfermería domiciliaria', role:'Enfermero/a', phone:'', medIds:[meds[0].id, meds[2].id], notes:'Apoyo con la medicación pautada.'})
     ];
-    return { patient:new Patient(), medications:meds, agenda:MedicationSchedule.today(meds),
-             caregivers, symptoms:[], rescues:[], history:[],
-             settings:{dark:false, large:false, high:false, sound:false, notifications:false} };
+    return {
+      patient:new Patient({name:'Paciente de ejemplo', age:68, diagnosis:'Seguimiento domiciliario'}),
+      medications:meds, agenda:MedicationSchedule.today(meds), agendaDate:isoDate(),
+      caregivers, symptoms:[], rescues:[], history:[],
+      settings:{dark:false, large:false, high:false, sound:false, notifications:false}
+    };
   }
 
   /* Guarda avisando si el navegador se queda sin espacio (las fotos
@@ -1516,6 +1558,7 @@ class App{
     main.innerHTML = `<div class="page">${html}</div>`;
     this.markActive();
     this.bind();
+    this.updateTopPatient();
     // Botón de bloqueo rápido: solo si hay PIN configurado
     const tl = document.getElementById('topLock');
     if(tl){ tl.hidden = !this.pin.enabled(); tl.onclick = () => this.lock(); }
@@ -1526,6 +1569,28 @@ class App{
   updateClock(){
     const c = document.getElementById('clock');
     if(c) c.textContent = new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+  }
+
+  /* El paciente es el centro de la aplicación: se ve en todas las
+     secciones, no solo en el panel de inicio. */
+  updateTopPatient(){
+    const el = document.getElementById('topPatient');
+    if(!el || !this.state) return;
+    const p = this.state.patient;
+    el.innerHTML = p.registrado
+      ? `<button class="linklike" type="button" data-action="goSettings"
+                 title="Editar los datos del paciente">${escapeHtml(p.resumen)}</button>`
+      : `<button class="linklike warnlike" type="button" data-action="goSettings">
+           Sin paciente registrado · pulsa para configurarlo</button>`;
+    el.onclick = e => { if(e.target.closest('[data-action="goSettings"]')) this.go('settings'); };
+  }
+
+  /* Saludo según la hora, sin suponer nada del paciente */
+  greeting(){
+    const h = new Date().getHours();
+    const momento = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+    const p = this.state.patient;
+    return p.registrado ? `${momento}, ${String(p.name).trim().split(/\s+/)[0]}` : momento;
   }
 
   /* --- Fragmentos reutilizables --- */
@@ -1569,7 +1634,9 @@ class App{
     // Comparación en fecha local: con UTC, a partir de las 7 p. m. contaba mal
     const symToday = this.state.symptoms.filter(x => isoDate(new Date(x.date)) === isoDate()).length;
     const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
-    return this.title('Buenos días, ' + this.state.patient.name.split(' ')[0], this.state.patient.diagnosis) + `
+    return this.title(this.greeting(),
+      this.state.patient.diagnosis || 'Seguimiento de la medicación en casa')
+      + this.onboardingHTML() + `
       <div class="grid stats">
         <div class="card stat"><span class="icon" aria-hidden="true">◷</span><div class="label">Pendientes hoy</div><div class="n">${this.pending()}</div></div>
         <div class="card stat"><span class="icon" aria-hidden="true">✓</span><div class="label">Administrados</div><div class="n">${done}</div></div>
@@ -1617,10 +1684,14 @@ class App{
         <div class="card">
           <b>Información del paciente</b>
           <ul class="list">
-            <li><span>Edad</span><b>${escapeHtml(this.state.patient.age)} años</b></li>
-            <li><span>Diagnóstico</span><b>${escapeHtml(this.state.patient.diagnosis)}</b></li>
+            <li><span>Nombre</span><b>${escapeHtml(this.state.patient.name || 'Sin registrar')}</b></li>
+            <li><span>Edad</span><b>${this.state.patient.age ? escapeHtml(this.state.patient.age) + ' años' : '—'}</b></li>
+            <li><span>Diagnóstico</span><b>${escapeHtml(this.state.patient.diagnosis || '—')}</b></li>
             <li><span>Fecha</span><b>${fecha}</b></li>
           </ul>
+          <div class="actions" style="margin-top:10px">
+            <button class="btn secondary small" type="button" data-action="goSettings">Editar paciente</button>
+          </div>
         </div>
         <div class="card">
           <b>Equipo de cuidado</b>
@@ -1647,6 +1718,34 @@ class App{
           </div>`;
         })()}
       </div>`;
+  }
+
+  /* Primeros pasos: se muestra solo mientras falte lo esencial */
+  onboardingHTML(){
+    const pasos = [
+      { hecho:this.state.patient.registrado, texto:'Registrar al paciente',
+        accion:'goSettings', btn:'Ir a Ajustes' },
+      { hecho:this.state.medications.length > 0, texto:'Añadir el primer medicamento',
+        accion:'newMed', btn:'Nuevo medicamento' },
+      { hecho:this.state.caregivers.length > 0, texto:'Añadir a quienes cuidan',
+        accion:'newCaregiver', btn:'Nuevo cuidador' }
+    ];
+    if(pasos.every(x => x.hecho)) return '';
+    return `<div class="card" style="margin-bottom:18px">
+      <b>Primeros pasos</b>
+      <p class="muted">La aplicación empieza vacía y no supone nada sobre el paciente.
+        Completa estos pasos para ponerla en marcha.</p>
+      <ul class="list">
+        ${pasos.map(x => `<li>
+          <span>${x.hecho ? '<span class="pill">Hecho</span>' : '<span class="pill warn">Pendiente</span>'}
+            ${escapeHtml(x.texto)}</span>
+          ${x.hecho ? '' : `<button class="btn small" type="button" data-action="${x.accion}">${escapeHtml(x.btn)}</button>`}
+        </li>`).join('')}
+      </ul>
+      <p class="muted" style="font-size:.84rem;margin:12px 0 0">¿Solo quieres ver cómo funciona?
+        Carga los <button class="linklike" type="button" data-action="loadDemo">datos de ejemplo</button>
+        y vacíalos cuando termines.</p>
+    </div>`;
   }
 
   agendaHTML(header=true){
@@ -1825,10 +1924,12 @@ class App{
       <div class="settings grid">
         <div class="card">
           <b>Paciente</b>
+          <p class="muted">Cuida acompaña a <b>una sola persona</b>: los medicamentos, los síntomas,
+            los cuidadores y el historial pertenecen a ella.</p>
           <form id="patientForm" class="form" style="margin-top:14px">
-            <label>Nombre<input class="input" id="pName" name="name" autocomplete="name" value="${escapeHtml(p.name)}"></label>
-            <label>Edad<input class="input" id="pAge" name="age" type="number" min="0" max="120" inputmode="numeric" value="${escapeHtml(p.age)}"></label>
-            <label class="full">Diagnóstico<input class="input" id="pDiagnosis" name="diagnosis" value="${escapeHtml(p.diagnosis)}"></label>
+            <label>Nombre<input class="input" id="pName" name="name" autocomplete="name" placeholder="Nombre y apellidos" value="${escapeHtml(p.name)}"></label>
+            <label>Edad<input class="input" id="pAge" name="age" type="number" min="0" max="120" inputmode="numeric" placeholder="Opcional" value="${escapeHtml(p.age)}"></label>
+            <label class="full">Diagnóstico o motivo de seguimiento<input class="input" id="pDiagnosis" name="diagnosis" placeholder="Opcional" value="${escapeHtml(p.diagnosis)}"></label>
             <div class="modal-foot full"><button class="btn" type="submit">Guardar paciente</button></div>
           </form>
         </div>
@@ -1978,7 +2079,8 @@ class App{
         <div class="actions" style="margin-top:16px">
           <button class="btn" type="button" data-action="exportJSON" ${SECURE?'':'disabled'}>Descargar respaldo cifrado</button>
           <button class="btn secondary" type="button" data-action="import">Restaurar respaldo</button>
-          <button class="btn danger" type="button" data-action="reset">Restablecer datos de ejemplo</button>
+          <button class="btn secondary" type="button" data-action="loadDemo">Cargar datos de ejemplo</button>
+          <button class="btn danger" type="button" data-action="reset">Vaciar todo</button>
         </div>
 
         <div style="margin-top:20px" ${this.mode === 'perfil' ? 'hidden' : ''}>
@@ -2079,6 +2181,8 @@ class App{
       case 'restorePrev': return this.restorePrevious();
       case 'restoreSnap': return this.restoreSnapshot(+id);
       case 'reset': return this.resetData();
+      case 'loadDemo': return this.loadDemo();
+      case 'goSettings': return this.go('settings');
       case 'resetAgenda':
         this.state.agenda = MedicationSchedule.today(this.state.medications);
         this.state.agendaDate = isoDate();
@@ -2135,7 +2239,7 @@ class App{
       : new Date().toLocaleString('es-CO');
     return [
       'Cuida · Registro de medicación',
-      `Paciente: ${p.name}`,
+      `Paciente: ${p.name || 'sin registrar'}`,
       `Medicamento: ${m.name} ${m.dose} ${m.unit} (${m.route})`,
       `Hora programada: ${a.time}`,
       `Administrado: ${momento}`,
@@ -2232,10 +2336,26 @@ class App{
     this.whatsappNotice(registro, m, who);
   }
 
+  /* Vaciar: deja la aplicación como recién abierta, sin ningún dato */
   async resetData(){
-    const ok = await confirmDialog({title:'Restablecer datos', message:'¿Restablecer los datos de ejemplo? Se perderán los cambios actuales.', confirmText:'Restablecer', danger:true});
+    const ok = await confirmDialog({
+      title:'Vaciar toda la información',
+      message:'Se borrarán el paciente, los medicamentos, los cuidadores y el historial de esta aplicación. Descarga antes un respaldo si quieres conservarlos.',
+      confirmText:'Vaciar todo', danger:true});
     if(!ok) return;
-    this.state = this.seed(); this.save(); this.render(); toast('Datos de ejemplo restablecidos.', 'good');
+    this.state = this.seed(); this.migrate(); this.save(); this.render();
+    toast('Aplicación vaciada. Empieza registrando al paciente en Ajustes.', 'good', 7000);
+  }
+
+  /* Cargar la demo: útil para ver la aplicación llena antes de usarla */
+  async loadDemo(){
+    const ok = await confirmDialog({
+      title:'Cargar datos de ejemplo',
+      message:'Se sustituirá la información actual por un caso inventado, con medicamentos y cuidadores de muestra. Sirve para explorar la aplicación.',
+      confirmText:'Cargar ejemplo', danger:true});
+    if(!ok) return;
+    this.state = this.demoData(); this.migrate(); this.save(); this.render();
+    toast('Datos de ejemplo cargados. Vacíalos desde Ajustes cuando quieras empezar de verdad.', 'good', 8000);
   }
 
   /* --- Diálogo de medicamento (crear/editar) --- */
@@ -2611,12 +2731,15 @@ class App{
   }
 
   savePatient(){
+    const edad = document.getElementById('pAge').value;
     this.state.patient = new Patient({
-      name: document.getElementById('pName').value,
-      age: +document.getElementById('pAge').value,
-      diagnosis: document.getElementById('pDiagnosis').value
+      name: document.getElementById('pName').value.trim(),
+      age: edad === '' ? '' : +edad,
+      diagnosis: document.getElementById('pDiagnosis').value.trim()
     });
-    this.save(); this.render(); toast('Datos del paciente guardados.', 'good');
+    this.save(); this.render();
+    toast(this.state.patient.registrado ? 'Datos del paciente guardados.' : 'Paciente sin nombre: escríbelo para identificar los registros.',
+          this.state.patient.registrado ? 'good' : 'bad');
   }
 
   /* ============================================================

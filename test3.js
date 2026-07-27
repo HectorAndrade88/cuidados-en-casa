@@ -98,9 +98,41 @@ const { Vault, Profile, PinLock, ImageTools, Phone, Modal, MedicationSchedule, M
 (async () => {
   await ready;   // el arranque es asíncrono: primero se busca el perfil publicado
 
-  sec('Arranque y compatibilidad con datos anteriores');
+  sec('Arranque vacío y contenido genérico');
   ok(!!app, 'la aplicación arranca sin errores');
-  ok(app.state.medications.length === 4, 'carga los medicamentos de ejemplo');
+  ok(app.state.medications.length === 0, 'no llega ningún medicamento inventado');
+  ok(app.state.caregivers.length === 0 && app.state.history.length === 0, 'tampoco cuidadores ni historial');
+  ok(app.state.patient.name === '' && app.state.patient.registrado === false, 'no hay ningún paciente supuesto');
+  ok(app.state.agenda.length === 0, 'la agenda arranca vacía');
+  ok(app.onboardingHTML().includes('Primeros pasos'), 'se ofrece el asistente de primeros pasos');
+  ok(app.onboardingHTML().includes('Pendiente'), 'los pasos aparecen como pendientes');
+  ok(/Buenos días|Buenas tardes|Buenas noches/.test(app.greeting()), 'el saludo se adapta a la hora');
+  ok(!app.greeting().includes(','), 'sin paciente registrado el saludo no nombra a nadie');
+
+  ok(!/María González/.test(html), 'no queda ningún nombre de paciente escrito en el código');
+  // La única mención que queda es el nombre de la clave antigua de almacenamiento
+  ok(!/paliativ/i.test(html.replace(/cuida-paliativos-v1/g, '')),
+     'no se presupone ninguna enfermedad ni especialidad concreta');
+  ok(!/Cáncer|oncolog/i.test(html), 'ni diagnósticos concretos en los textos');
+  ok(/Paciente de ejemplo/.test(html), 'los datos de muestra se identifican como ejemplo');
+  ok(typeof app.demoData === 'function' && typeof app.loadDemo === 'function', 'la demo existe pero solo bajo petición');
+
+  // Los datos guardados con el nombre de clave anterior no se pierden
+  const almacen = app.store;
+  localStorage.setItem('cuida-paliativos-v1', JSON.stringify({patient:{name:'Antiguo'}, medications:[]}));
+  localStorage.removeItem(almacen.key);
+  const rescatado = almacen.load();
+  ok(rescatado && rescatado.patient.name === 'Antiguo', 'se recuperan los datos guardados con la clave anterior');
+  ok(localStorage.getItem('cuida-paliativos-v1') === null, 'y se reubican bajo el nombre nuevo');
+
+  // El resto de las pruebas trabaja sobre los datos de ejemplo
+  app.state = app.demoData(); app.migrate();
+  ok(app.state.medications.length === 4, 'la demo carga los medicamentos de muestra');
+  ok(app.state.patient.registrado, 'la demo trae un paciente de ejemplo');
+  ok(app.onboardingHTML() === '', 'con todo completo el asistente desaparece');
+  ok(app.greeting().includes(','), 'con paciente registrado el saludo lo nombra');
+
+  sec('Compatibilidad con datos anteriores');
   ok(app.state.settings.autolock === 5, 'añade el ajuste de autobloqueo');
   ok(app.state.settings.medView === 'tabla', 'añade la vista de medicamentos');
   ok(app.state.settings.lastBackup === '', 'registra que aún no hay respaldo');
