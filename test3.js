@@ -100,7 +100,7 @@ const { Vault, Profile, PinLock, ImageTools, Phone, Modal, MedicationSchedule, M
 
   sec('Arranque y compatibilidad con datos anteriores');
   ok(!!app, 'la aplicación arranca sin errores');
-  ok(app.state.medications.length === 3, 'carga los medicamentos de ejemplo');
+  ok(app.state.medications.length === 4, 'carga los medicamentos de ejemplo');
   ok(app.state.settings.autolock === 5, 'añade el ajuste de autobloqueo');
   ok(app.state.settings.medView === 'tabla', 'añade la vista de medicamentos');
   ok(app.state.settings.lastBackup === '', 'registra que aún no hay respaldo');
@@ -387,6 +387,28 @@ const { Vault, Profile, PinLock, ImageTools, Phone, Modal, MedicationSchedule, M
 
   const inactivo = med({active:false});
   ok(!MS.appliesOn(inactivo, '2026-07-01'), 'un medicamento inactivo no se programa');
+
+  sec('Inventario sin horario de aplicación (según necesidad)');
+  const demanda = med({pattern:'demanda', times:['08:00'], stock:12, minStock:4, startDate:'2026-07-01', endDate:'2026-08-01'});
+  ok(demanda.times.length === 0, 'al marcarlo según necesidad se descartan los horarios');
+  ok(demanda.startDate === '' && demanda.endDate === '', 'tampoco conserva fechas de aplicación');
+  ok(MS.onDemand(demanda), 'queda identificado como medicamento sin horario');
+  ok(!MS.appliesOn(demanda, '2026-07-01') && !MS.appliesOn(demanda, '2026-12-25'), 'no toca ningún día: nunca se programa solo');
+  ok(MS.forDate([demanda], '2026-07-01').length === 0, 'no genera entradas en la agenda');
+  ok(MS.describe(demanda) === 'Según necesidad · sin horario fijo', 'se describe con claridad');
+  ok(MS.dosesPerDay(demanda) === 0, 'no tiene consumo diario previsible');
+  ok(Inventory.days(demanda) === null, 'no se inventa una duración del inventario');
+  ok(Inventory.daysText(demanda) === 'sin consumo previsible', 'lo dice en vez de mostrar cero días');
+  ok(Inventory.level(demanda) === 'ok' && Inventory.level(med({pattern:'demanda', stock:2, minStock:4})) === 'low',
+     'la alerta de stock bajo sigue funcionando sin horario');
+
+  const soloInventario = new Medication({name:'Gasas', pattern:'demanda', stock:30, minStock:10});
+  ok(soloInventario.times.length === 0 && MS.forDate([soloInventario]).length === 0,
+     'se puede llevar inventario de algo que no se administra por reloj');
+  ok(MS.nextDate(soloInventario, '2026-07-01', 10) === null, 'no hay próxima fecha que calcular');
+
+  const mezcla = [ med({name:'Programado', times:['08:00']}), soloInventario ];
+  ok(MS.forDate(mezcla, '2026-07-01').length === 1, 'conviven medicamentos con y sin horario');
 
   sec('Pautas: descripción y próxima fecha');
   ok(MS.describe(diaria) === 'Todos los días', 'describe la pauta diaria');

@@ -872,8 +872,8 @@ class Medication{
     id:uuid(), name:'', activeIngredient:'', dose:'', unit:'mg',
     presentation:'Comprimido', route:'Oral', times:[], indication:'', notes:'',
     color:'#3a5bd0', active:true, stock:0, minStock:5, expiry:'', photo:'', lab:'', nationalCode:'',
-    /* --- Pauta: no todos los tratamientos son diarios --- */
-    pattern:'diaria',   // 'diaria' | 'cada' (cada N días) | 'semana' (días fijos)
+    /* --- Pauta: no todos los tratamientos son diarios, ni programados --- */
+    pattern:'diaria',   // 'diaria' | 'cada' | 'semana' | 'demanda' (sin horario)
     everyDays:2,        // intervalo para la pauta 'cada'
     weekdays:[],        // 0 = domingo … 6 = sábado, para la pauta 'semana'
     startDate:'',       // ancla del ciclo: desde aquí se cuentan los intervalos
@@ -881,8 +881,12 @@ class Medication{
   }, o);
     if(!Array.isArray(this.times)) this.times = [];
     if(!Array.isArray(this.weekdays)) this.weekdays = [];
-    if(!['diaria','cada','semana'].includes(this.pattern)) this.pattern = 'diaria';
-    if(!this.startDate) this.startDate = isoDate();
+    if(!['diaria','cada','semana','demanda'].includes(this.pattern)) this.pattern = 'diaria';
+    if(this.pattern === 'demanda'){                   // sin horario ni fechas
+      this.times = []; this.startDate = ''; this.endDate = '';
+    }else if(!this.startDate){
+      this.startDate = isoDate();
+    }
     this.everyDays = Math.min(60, Math.max(1, +this.everyDays || 1));
   }
 }
@@ -908,6 +912,7 @@ class MedicationSchedule{
   /* ¿Le corresponde a este medicamento en esta fecha? */
   static appliesOn(m, fecha = isoDate()){
     if(!m || !m.active) return false;
+    if(m.pattern === 'demanda') return false;              // no se programa nunca
     if(m.startDate && fecha < m.startDate) return false;   // aún no empieza
     if(m.endDate   && fecha > m.endDate)   return false;   // ya terminó
     if(m.pattern === 'semana')
@@ -946,6 +951,7 @@ class MedicationSchedule{
 
   /* Descripción legible de la pauta */
   static describe(m){
+    if(m.pattern === 'demanda') return 'Según necesidad · sin horario fijo';
     let t = 'Todos los días';
     if(m.pattern === 'cada'){
       const n = Math.max(1, +m.everyDays || 1);
@@ -962,18 +968,26 @@ class MedicationSchedule{
 
   /* Dosis medias por día: necesario para saber cuánto dura el inventario */
   static dosesPerDay(m){
+    if(m.pattern === 'demanda') return 0;   // consumo imprevisible
     const n = (m.times || []).length;
     if(!n) return 0;
     if(m.pattern === 'cada')  return n / Math.max(1, +m.everyDays || 1);
     if(m.pattern === 'semana') return n * ((m.weekdays || []).length) / 7;
     return n;
   }
+  static onDemand(m){ return !!m && m.pattern === 'demanda'; }
 }
 class Inventory{
-  /* Días de tratamiento que cubre el stock, según la pauta real */
+  /* Días de tratamiento que cubre el stock, según la pauta real.
+     Devuelve null cuando no hay consumo previsible (según necesidad
+     o sin horarios): inventarse una cifra sería engañoso. */
   static days(m){
     const porDia = MedicationSchedule.dosesPerDay(m);
-    return porDia ? Math.floor(m.stock / porDia) : 0;
+    return porDia ? Math.floor(m.stock / porDia) : null;
+  }
+  static daysText(m){
+    const d = this.days(m);
+    return d === null ? 'sin consumo previsible' : `${d} días`;
   }
   static level(m){ return m.stock<=m.minStock ? 'low' : 'ok'; }
 }
@@ -1412,7 +1426,9 @@ class App{
     const meds = [
       new Medication({name:'Morfina', activeIngredient:'Sulfato de morfina', dose:'10', unit:'mg', presentation:'Solución oral', route:'Oral', times:['08:00','14:00','20:00'], indication:'Dolor intenso', notes:'Administrar con jeringa dosificadora.', color:'#805ad5', stock:28, minStock:10, expiry:'2027-05-30', lab:'Ejemplo Farma', photo:svg('#805ad5','MORFINA')}),
       new Medication({name:'Paracetamol', activeIngredient:'Paracetamol', dose:'1', unit:'g', presentation:'Comprimido', route:'Oral', times:['09:00','21:00'], indication:'Dolor o fiebre', color:'#92500a', stock:8, minStock:10, expiry:'2026-10-12', lab:'Ejemplo Farma', photo:svg('#c2740f','PARACETAMOL')}),
-      new Medication({name:'Ondansetrón', activeIngredient:'Ondansetrón', dose:'4', unit:'mg', presentation:'Comprimido', route:'Oral', times:['08:00','20:00'], indication:'Náuseas y vómitos', color:'#0f6f52', stock:16, minStock:6, expiry:'2027-01-08', lab:'Ejemplo Farma', photo:svg('#0f6f52','ONDANSETRÓN')})
+      new Medication({name:'Ondansetrón', activeIngredient:'Ondansetrón', dose:'4', unit:'mg', presentation:'Comprimido', route:'Oral', times:['08:00','20:00'], indication:'Náuseas y vómitos', color:'#0f6f52', stock:16, minStock:6, expiry:'2027-01-08', lab:'Ejemplo Farma', photo:svg('#0f6f52','ONDANSETRÓN')}),
+      // Ejemplo de medicamento sin horario: solo se controla el inventario
+      new Medication({name:'Hioscina', activeIngredient:'Butilbromuro de hioscina', dose:'10', unit:'mg', presentation:'Ampolla', route:'Subcutánea', pattern:'demanda', indication:'Secreciones o cólicos, según necesidad', notes:'Registrar cada aplicación en el momento.', color:'#7a3d00', stock:12, minStock:4, expiry:'2027-03-15', lab:'Ejemplo Farma', photo:svg('#7a3d00','HIOSCINA')})
     ];
     // Cuidadores de ejemplo, cada uno con VARIOS medicamentos asignados
     const caregivers = [
@@ -1612,6 +1628,24 @@ class App{
             ? `<ul class="list">${this.state.caregivers.slice(0,4).map(c=>`<li><span class="car-line"><span class="avatar sm" aria-hidden="true">${escapeHtml(this.initials(c.name))}</span> ${escapeHtml(c.name)}</span><span class="pill">${c.medIds.length} med.</span></li>`).join('')}</ul>`
             : '<div class="empty">Sin cuidadores. Añádelos en la sección Cuidadores.</div>'}
         </div>
+        ${(() => {
+          const puntuales = this.state.medications.filter(x => x.active && MedicationSchedule.onDemand(x));
+          if(!puntuales.length) return '';
+          return `<div class="card">
+            <b>Según necesidad</b>
+            <p class="muted" style="font-size:.84rem;margin:4px 0 0">No tienen horario: se registran en el momento en que se administran.</p>
+            <ul class="list">
+              ${puntuales.map(x => `<li>
+                <span class="car-line">
+                  <img class="thumb" src="${safeImage(x.photo)}" alt="">
+                  <span><b>${escapeHtml(x.name)}</b><br>
+                    <small class="muted">${escapeHtml(x.dose)} ${escapeHtml(x.unit)} · quedan ${x.stock}${Inventory.level(x)==='low'?' (bajo mínimo)':''}</small></span>
+                </span>
+                <button class="btn small" type="button" data-action="takeNow" data-id="${x.id}">Registrar</button>
+              </li>`).join('')}
+            </ul>
+          </div>`;
+        })()}
       </div>`;
   }
 
@@ -1646,9 +1680,12 @@ class App{
       <td data-label="Dosis">${escapeHtml(m.dose)} ${escapeHtml(m.unit)}</td>
       <td data-label="Pauta">${m.times.map(escapeHtml).join(', ')||'—'}<br>
         <small class="muted">${escapeHtml(MedicationSchedule.describe(m))}</small></td>
-      <td data-label="Inventario">${m.stock} <small class="muted">(${Inventory.days(m)} días)</small></td>
+      <td data-label="Inventario">${m.stock} <small class="muted">(${escapeHtml(Inventory.daysText(m))})</small></td>
       <td data-label="Estado"><span class="pill ${Inventory.level(m)==='low'?'bad':''}">${m.active?'Activo':'Inactivo'}</span></td>
-      <td data-label="Acción"><div class="actions"><button class="btn secondary small" type="button" data-action="viewMed" data-id="${m.id}">Ver</button><button class="btn secondary small" type="button" data-action="editMed" data-id="${m.id}">Editar</button></div></td>
+      <td data-label="Acción"><div class="actions">
+        ${MedicationSchedule.onDemand(m) ? `<button class="btn small" type="button" data-action="takeNow" data-id="${m.id}">Registrar toma</button>` : ''}
+        <button class="btn secondary small" type="button" data-action="viewMed" data-id="${m.id}">Ver</button>
+        <button class="btn secondary small" type="button" data-action="editMed" data-id="${m.id}">Editar</button></div></td>
     </tr>`).join('');
 
     const galeria = this.state.medications.map(m => {
@@ -1664,10 +1701,12 @@ class App{
           </div>
           <div>
             <span class="pill ${Inventory.level(m)==='low'?'bad':''}">${Inventory.level(m)==='low'?'Stock bajo':'Stock correcto'}</span>
-            <span class="pill">${MedicationSchedule.appliesOn(m) ? 'Hoy toca' : 'Hoy no toca'}</span>
+            <span class="pill">${MedicationSchedule.onDemand(m) ? 'Según necesidad'
+              : MedicationSchedule.appliesOn(m) ? 'Hoy toca' : 'Hoy no toca'}</span>
           </div>
           ${cuidadores.length ? `<div class="chips mini">${cuidadores.map(c=>`<span class="chip">${escapeHtml(c.name)}</span>`).join('')}</div>` : ''}
           <div class="actions">
+            ${MedicationSchedule.onDemand(m) ? `<button class="btn small" type="button" data-action="takeNow" data-id="${m.id}">Registrar toma</button>` : ''}
             <button class="btn secondary small" type="button" data-action="viewMed" data-id="${m.id}">Ver ficha</button>
             <button class="btn secondary small" type="button" data-action="editMed" data-id="${m.id}">Editar</button>
           </div>
@@ -1701,16 +1740,16 @@ class App{
     const rows = this.state.medications.map(m => `<tr>
       <td data-label="Medicamento"><div class="med-row"><img class="thumb" src="${safeImage(m.photo)}" alt=""><b>${escapeHtml(m.name)}</b></div></td>
       <td data-label="Restante"><b>${m.stock}</b> unidades</td>
-      <td data-label="Consumo">${(Math.round(MedicationSchedule.dosesPerDay(m)*100)/100)}/día<br>
+      <td data-label="Consumo">${MedicationSchedule.onDemand(m) ? '—' : (Math.round(MedicationSchedule.dosesPerDay(m)*100)/100) + '/día'}<br>
         <small class="muted">${escapeHtml(MedicationSchedule.describe(m))}</small></td>
-      <td data-label="Días">${Inventory.days(m)} días</td>
+      <td data-label="Duración">${escapeHtml(Inventory.daysText(m))}</td>
       <td data-label="Vencimiento">${escapeHtml(m.expiry)||'—'}</td>
       <td data-label="Alerta">${Inventory.level(m)==='low' ? '<span class="pill bad">Stock bajo</span>' : '<span class="pill">Correcto</span>'}</td>
       <td data-label="Acción"><button class="btn secondary small" type="button" data-action="stock" data-id="${m.id}">Ajustar</button></td>
     </tr>`).join('');
     return `<div class="card table-wrap"><table class="table">
       <caption class="sr-only">Inventario de medicamentos</caption>
-      <thead><tr><th>Medicamento</th><th>Restante</th><th>Consumo</th><th>Días</th><th>Vencimiento</th><th>Alerta</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+      <thead><tr><th>Medicamento</th><th>Restante</th><th>Consumo</th><th>Duración</th><th>Vencimiento</th><th>Alerta</th><th><span class="sr-only">Acciones</span></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
   }
@@ -2022,6 +2061,7 @@ class App{
       case 'newCaregiver': return this.caregiverDialog();
       case 'editCaregiver': return this.caregiverDialog(this.caregiver(id));
       case 'delCaregiver': return this.deleteCaregiver(id);
+      case 'takeNow': return this.takeDose(id);
       case 'viewMed': return this.medDetail(id);
       case 'viewPhoto': return this.photoViewer(id);
       case 'viewMode':
@@ -2171,6 +2211,27 @@ class App{
     }));
   }
 
+  /* Toma puntual de un medicamento sin horario: no viene de la agenda,
+     así que se registra en el momento, descuenta inventario y avisa igual. */
+  async takeDose(id){
+    const m = this.med(id); if(!m) return;
+    const who = await this.pickResponsible(m);
+    if(who === null) return;
+    const registro = {
+      id:uuid(), medId:m.id, time:new Date().toTimeString().slice(0,5),
+      status:'administered', actual:new Date().toISOString(),
+      responsible:who, note:'Según necesidad'
+    };
+    m.stock = Math.max(0, m.stock - 1);
+    new HistoryManager().add(this.state, 'medicación',
+      `${m.name} administrado según necesidad`, {responsible:who});
+    this.save(); this.render();
+    toast(`${m.name} registrado. Quedan ${m.stock} en inventario.`, 'good', 6000);
+    if(Inventory.level(m) === 'low')
+      toast(`Atención: quedan ${m.stock} de ${m.name}, por debajo del mínimo.`, 'bad', 8000);
+    this.whatsappNotice(registro, m, who);
+  }
+
   async resetData(){
     const ok = await confirmDialog({title:'Restablecer datos', message:'¿Restablecer los datos de ejemplo? Se perderán los cambios actuales.', confirmText:'Restablecer', danger:true});
     if(!ok) return;
@@ -2190,15 +2251,17 @@ class App{
         <label>Unidad<input class="input" name="unit" value="${escapeHtml(m.unit)}"></label>
         <label>Presentación<input class="input" name="presentation" value="${escapeHtml(m.presentation)}"></label>
         <label>Vía<input class="input" name="route" value="${escapeHtml(m.route)}"></label>
-        <label class="full">Horarios <span class="req">*</span><input class="input" name="times" required value="${escapeHtml(m.times.join(', '))}"><span class="hint">Formato HH:MM separados por coma. Ej: 08:00, 20:00</span><p class="err" data-err="times" role="alert"></p></label>
-
         <label class="full">Cada cuánto <span class="req">*</span>
           <select class="input" name="pattern" id="patternSel">
             <option value="diaria" ${m.pattern==='diaria'?'selected':''}>Todos los días</option>
             <option value="cada"   ${m.pattern==='cada'  ?'selected':''}>Cada cierto número de días</option>
             <option value="semana" ${m.pattern==='semana'?'selected':''}>Días fijos de la semana</option>
+            <option value="demanda" ${m.pattern==='demanda'?'selected':''}>Según necesidad · sin horario</option>
           </select>
+          <span class="hint" id="demandaHint" hidden>Solo se controla el inventario: no se programa
+            ninguna dosis ni aparece en la agenda. Las tomas se registran cuando ocurren.</span>
         </label>
+        <label class="full" id="timesWrap">Horarios <span class="req">*</span><input class="input" name="times" value="${escapeHtml(m.times.join(', '))}"><span class="hint">Formato HH:MM separados por coma. Ej: 08:00, 20:00</span><p class="err" data-err="times" role="alert"></p></label>
         <label id="everyWrap">Intervalo en días
           <input class="input" name="everyDays" type="number" min="1" max="60" inputmode="numeric" value="${escapeHtml(m.everyDays)}">
           <span class="hint">2 = un día sí y otro no · 3 = cada tres días.</span>
@@ -2210,11 +2273,11 @@ class App{
             <label class="check"><input type="checkbox" name="weekday" value="${i}" ${m.weekdays.includes(i)?'checked':''}>${d.charAt(0).toUpperCase()+d.slice(1)}</label>`).join('')}
           <p class="err" data-err="weekdays" role="alert" style="width:100%"></p>
         </fieldset>
-        <label>Inicio de la pauta
+        <label id="startWrap">Inicio de la pauta
           <input class="input" name="startDate" type="date" value="${escapeHtml(m.startDate)}">
           <span class="hint">Desde esta fecha se cuentan los intervalos.</span>
         </label>
-        <label>Fin del tratamiento
+        <label id="endWrap">Fin del tratamiento
           <input class="input" name="endDate" type="date" value="${escapeHtml(m.endDate)}">
           <span class="hint">Opcional. Después ya no se programa.</span>
           <p class="err" data-err="endDate" role="alert"></p>
@@ -2240,11 +2303,17 @@ class App{
         <button class="btn secondary" type="button" data-close>Cancelar</button>
         <button class="btn" type="submit" form="medForm" id="saveMed">Guardar medicamento</button>
       </div>`, { onOpen:() => {
-        // Solo se muestran los campos que la pauta elegida necesita
+        // Solo se muestran los campos que la pauta elegida necesita.
+        // «Según necesidad» oculta todo lo temporal: no hay fecha ni horario.
         const sel = document.getElementById('patternSel');
         const syncPauta = () => {
-          document.getElementById('everyWrap').hidden = sel.value !== 'cada';
-          document.getElementById('weekWrap').hidden  = sel.value !== 'semana';
+          const demanda = sel.value === 'demanda';
+          document.getElementById('everyWrap').hidden  = sel.value !== 'cada';
+          document.getElementById('weekWrap').hidden   = sel.value !== 'semana';
+          document.getElementById('timesWrap').hidden  = demanda;
+          document.getElementById('startWrap').hidden  = demanda;
+          document.getElementById('endWrap').hidden    = demanda;
+          document.getElementById('demandaHint').hidden = !demanda;
         };
         sel.onchange = syncPauta; syncPauta();
 
@@ -2297,12 +2366,15 @@ class App{
 
       if(!f.name.trim()){ showErr('name','El nombre es obligatorio.'); firstBad ??= 'name'; }
       if(!f.dose.trim()){ showErr('dose','La dosis es obligatoria.'); firstBad ??= 'dose'; }
-      const times = f.times.split(',').map(x=>x.trim()).filter(Boolean);
-      const validTimes = times.length && times.every(x => RE_TIME.test(x));
-      if(!validTimes){ showErr('times','Use horarios válidos, por ejemplo: 08:00, 20:00.'); firstBad ??= 'times'; }
 
       // --- Validación de la pauta ---
-      const pattern  = ['diaria','cada','semana'].includes(f.pattern) ? f.pattern : 'diaria';
+      const pattern  = ['diaria','cada','semana','demanda'].includes(f.pattern) ? f.pattern : 'diaria';
+      const demanda  = pattern === 'demanda';
+      // Sin horario de aplicación no se exigen horas: solo se controla el inventario
+      const times = demanda ? [] : (f.times || '').split(',').map(x=>x.trim()).filter(Boolean);
+      if(!demanda && !(times.length && times.every(x => RE_TIME.test(x)))){
+        showErr('times','Use horarios válidos, por ejemplo: 08:00, 20:00.'); firstBad ??= 'times';
+      }
       const weekdays = [...form.querySelectorAll('input[name="weekday"]:checked')].map(i => +i.value);
       const cada     = Math.min(60, Math.max(1, +f.everyDays || 1));
       if(pattern === 'cada' && !(+f.everyDays >= 1 && +f.everyDays <= 60)){
@@ -2311,7 +2383,7 @@ class App{
       if(pattern === 'semana' && !weekdays.length){
         showErr('weekdays','Marca al menos un día de la semana.'); firstBad ??= 'pattern';
       }
-      if(f.endDate && f.startDate && f.endDate < f.startDate){
+      if(!demanda && f.endDate && f.startDate && f.endDate < f.startDate){
         showErr('endDate','El fin del tratamiento no puede ser anterior al inicio.'); firstBad ??= 'endDate';
       }
       if(firstBad){ form.elements[firstBad]?.focus?.(); return; }
@@ -2321,8 +2393,9 @@ class App{
       m.pattern   = pattern;
       m.everyDays = cada;
       m.weekdays  = weekdays;
-      m.startDate = f.startDate || isoDate();
-      m.endDate   = f.endDate || '';
+      // Según necesidad: sin fecha de aplicación ni fin programado
+      m.startDate = demanda ? '' : (f.startDate || isoDate());
+      m.endDate   = demanda ? '' : (f.endDate || '');
       if(!edit) this.state.medications.push(m);
       // Se recalcula la agenda conservando las dosis ya registradas hoy
       this.state.agenda = MedicationSchedule.merge(
@@ -2566,16 +2639,18 @@ class App{
             ${fila('Vía', m.route)}
             ${fila('Horarios', m.times.join(', '))}
             <dt>Pauta</dt><dd>${escapeHtml(MedicationSchedule.describe(m))}
-              ${MedicationSchedule.appliesOn(m) ? '<span class="pill">Hoy toca</span>'
-                : `<span class="pill warn">Hoy no toca</span>`}</dd>
+              ${MedicationSchedule.onDemand(m) ? ''
+                : MedicationSchedule.appliesOn(m) ? '<span class="pill">Hoy toca</span>'
+                : '<span class="pill warn">Hoy no toca</span>'}</dd>
             ${fila('Inicio de la pauta', m.startDate)}
-            ${(() => { const p = MedicationSchedule.nextDate(m, addDays(isoDate(),1));
+            ${MedicationSchedule.onDemand(m) ? '' : (() => {
+                 const p = MedicationSchedule.nextDate(m, addDays(isoDate(),1));
                  return p ? `<dt>Próxima vez</dt><dd>${escapeHtml(prettyDate(p))}</dd>` : ''; })()}
             ${fila('Indicación', m.indication)}
             ${fila('Laboratorio', m.lab)}
             ${fila('Código nacional', m.nationalCode)}
             ${fila('Vencimiento', m.expiry)}
-            <dt>Inventario</dt><dd>${m.stock} unidades · ${Inventory.days(m)} días
+            <dt>Inventario</dt><dd>${m.stock} unidades · ${escapeHtml(Inventory.daysText(m))}
               ${Inventory.level(m)==='low' ? '<span class="pill bad">Stock bajo</span>' : ''}</dd>
           </dl>
           ${m.notes ? `<p class="muted" style="margin-top:14px">${escapeHtml(m.notes)}</p>` : ''}
@@ -2589,10 +2664,13 @@ class App{
       </div>
       <div class="modal-foot">
         <button class="btn secondary" type="button" data-close>Cerrar</button>
-        <button class="btn" type="button" id="detailEdit">Editar medicamento</button>
+        ${MedicationSchedule.onDemand(m) ? '<button class="btn" type="button" id="detailTake">Registrar toma</button>' : ''}
+        <button class="btn ${MedicationSchedule.onDemand(m)?'secondary':''}" type="button" id="detailEdit">Editar medicamento</button>
       </div>`);
     document.getElementById('detailPhoto').onclick = () => this.photoViewer(m.id);
     document.getElementById('detailEdit').onclick  = () => { Modal.close(); this.medDialog(m); };
+    const btnTake = document.getElementById('detailTake');
+    if(btnTake) btnTake.onclick = () => { Modal.close(); this.takeDose(m.id); };
   }
 
   photoViewer(id){

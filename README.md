@@ -27,11 +27,28 @@ No todo tratamiento es diario. Cada medicamento define **cada cuánto** se admin
 | **Todos los días** | Lo habitual | Morfina cada 8 horas |
 | **Cada N días** | Intervalos fijos | Cada 3 días, o un día sí y otro no |
 | **Días fijos de la semana** | Días concretos | Lunes, miércoles y viernes |
+| **Según necesidad** | Sin horario ni fecha | Hioscina para secreciones; también material fungible |
 
 Las pautas por intervalo se cuentan desde la **fecha de inicio**, que marca el punto de
 partida del ciclo: si empiezas un cada-3-días el 1 de julio, toca el 1, el 4, el 7… También
 puede fijarse un **fin de tratamiento** opcional, tras el cual el medicamento deja de
 programarse solo.
+
+### Sin horario de aplicación
+
+La pauta **según necesidad** existe para lo que se controla por existencias y no por reloj:
+medicación de rescate, algo que se administra cuando aparece el síntoma, o material fungible
+del que solo interesa saber cuánto queda. Al elegirla desaparecen los campos de horario,
+inicio y fin: no hay nada que programar.
+
+Estos medicamentos no generan dosis en la agenda ni aparecen como pendientes. Sí aparecen en
+Tratamiento, en el inventario y en una tarjeta propia del panel de inicio, con un botón
+**Registrar toma** que pide el responsable, descuenta una unidad del inventario, deja
+constancia en el historial y ofrece el aviso por WhatsApp, igual que una dosis programada.
+
+Su duración no se calcula: sin consumo previsible, cualquier cifra sería inventada, así que
+la columna muestra «sin consumo previsible». La alerta de stock bajo sí funciona con
+normalidad.
 
 La agenda pertenece a un día concreto y **se recrea sola al cambiar de fecha**, incluso con
 la aplicación abierta. Al editar un medicamento se recalcula conservando las dosis que ya
