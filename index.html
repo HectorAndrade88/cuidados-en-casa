@@ -1739,7 +1739,9 @@ class App{
     this.updateTopPatient();
     // Botón de bloqueo rápido: solo si hay PIN configurado
     const tl = document.getElementById('topLock');
-    if(tl){ tl.hidden = !this.pin.enabled(); tl.onclick = () => this.lock(); }
+    // Firebase Authentication es la única puerta de acceso en modo nube.
+    // El bloqueo PIN heredado no se ofrece ni se aplica a esta versión.
+    if(tl){ tl.hidden = true; tl.onclick = null; }
     main.focus({preventScroll:true});
   }
   renderIfDashboard(){ if(this.page==='dashboard') this.render(); }
@@ -1926,9 +1928,6 @@ class App{
           ${x.hecho ? '' : `<button class="btn small" type="button" data-action="${x.accion}">${escapeHtml(x.btn)}</button>`}
         </li>`).join('')}
       </ul>
-      <p class="muted" style="font-size:.84rem;margin:12px 0 0">¿Solo quieres ver cómo funciona?
-        Carga los <button class="linklike" type="button" data-action="loadDemo">datos de ejemplo</button>
-        y vacíalos cuando termines.</p>
     </div>`;
   }
 
@@ -2104,7 +2103,7 @@ class App{
   settingsHTML(){
     const s = this.state.settings, p = this.state.patient;
     const toggles = [['dark','Modo oscuro'],['large','Fuente y botones grandes'],['high','Alto contraste'],['sound','Sonido al llegar la hora'],['notifications','Notificaciones del navegador'],['whatsapp','Ofrecer aviso por WhatsApp al administrar']];
-    return this.title('Configuración', 'Preferencias, paciente y respaldo.') + `
+    return this.title('Configuración', 'Paciente, accesibilidad y avisos.') + `
       <div class="settings grid">
         <div class="card">
           <b>Paciente</b>
@@ -2125,9 +2124,6 @@ class App{
             ni envío automático. Se abre la aplicación y tú confirmas el envío. Solo aparece para los
             cuidadores que tengan celular guardado.</p>
         </div>
-        ${this.profileHTML()}
-        ${this.securityHTML()}
-        ${this.backupHTML()}
       </div>`;
   }
 
@@ -2309,14 +2305,6 @@ class App{
     const pf = document.getElementById('patientForm');
     if(pf) pf.onsubmit = e => { e.preventDefault(); this.savePatient(); };
 
-    // Tiempo de autobloqueo
-    const al = document.getElementById('autolock');
-    if(al) al.onchange = () => {
-      this.state.settings.autolock = +al.value;
-      this.save(); this.touch();
-      toast(+al.value ? `Se bloqueará tras ${al.options[al.selectedIndex].text.toLowerCase()} sin actividad.` : 'Autobloqueo desactivado.');
-    };
-
     // Activar con Enter/Espacio las fotos que abren el visor
     document.querySelectorAll('[data-action="viewPhoto"]').forEach(img => {
       img.onkeydown = e => {
@@ -2353,19 +2341,7 @@ class App{
       case 'viewMode':
         this.state.settings.medView = id;
         this.save(); return this.render();
-      case 'publishProfile': return this.publishProfile(false);
-      case 'changeKey': return this.publishProfile(true);
-      case 'loadPublished': return this.loadPublished();
-      case 'setPin': case 'changePin': return this.pinDialog(a === 'changePin');
-      case 'removePin': return this.removePin();
-      case 'lockNow': return this.lock();
-      case 'exportJSON': return this.exportBackup();
       case 'exportCSV': return this.exportCSV();
-      case 'import': return document.getElementById('importFile').click();
-      case 'restorePrev': return this.restorePrevious();
-      case 'restoreSnap': return this.restoreSnapshot(+id);
-      case 'reset': return this.resetData();
-      case 'loadDemo': return this.loadDemo();
       case 'goSettings': return this.go('settings');
       case 'resetAgenda':
         this.state.agenda = MedicationSchedule.today(this.state.medications);
