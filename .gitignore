@@ -2,6 +2,12 @@
 cuida-respaldo-*.json
 cuida-historial*.csv
 
+# Página de prueba de Firebase: herramienta local, no debe publicarse
+firebase/prueba.html
+
+# Carpeta de configuración local del entorno
+.claude/
+
 # Archivos de trabajo
 node_modules/
 package-lock.json

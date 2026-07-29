@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// Reglas de Storage para las fotos de medicamentos.
+// Mismo criterio que Firestore: solo cuentas Google autorizadas.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ⬇️ Mantén esta lista IGUAL que la de firestore.rules.
+    function autorizado() {
+      return request.auth != null && request.auth.token.email in [
+        'publicidadescarlata@gmail.com'
+        // , 'otro-cuidador@gmail.com'
+      ];
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if autorizado();
+    }
+  }
+}
