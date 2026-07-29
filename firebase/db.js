@@ -22,7 +22,7 @@ import {
   initializeAppCheck, ReCaptchaEnterpriseProvider
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+  getAuth, GoogleAuthProvider, signInWithPopup,
   signOut, onAuthStateChanged, getRedirectResult
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
@@ -126,11 +126,9 @@ class CuidaDBClass{
       throw error;
     }
     const prov = new GoogleAuthProvider();
-    // En móviles, la redirección es más fiable que una ventana emergente.
-    if(/Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(ua)){
-      await signInWithRedirect(this.auth, prov);
-      return null;
-    }
+    // Se usa popup también en móvil: GitHub Pages y firebaseapp.com son
+    // dominios distintos, por lo que la redirección pierde estado cuando el
+    // navegador particiona el almacenamiento de terceros.
     const cred = await signInWithPopup(this.auth, prov);
     this.user = cred.user;
     return cred.user;
