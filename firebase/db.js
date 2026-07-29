@@ -175,11 +175,11 @@ class CuidaDBClass{
   saveAgenda(date, items){ return this._setDoc([PATH.agenda, date], { date, items }); }
 
   /* ---- Imágenes (Storage) -------------------------------- */
-  /* Sube la foto del medicamento y devuelve su URL pública firmada. */
+  /* Sube la foto y devuelve tanto la ruta interna como la URL de lectura. */
   async uploadMedPhoto(medId, file){
     const r = ref(this.storage, `medicamentos/${medId}/foto.jpg`);
     await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
-    return getDownloadURL(r);
+    return { path:r.fullPath, url:await getDownloadURL(r) };
   }
   _delPhoto(medId){
     return deleteObject(ref(this.storage, `medicamentos/${medId}/foto.jpg`));

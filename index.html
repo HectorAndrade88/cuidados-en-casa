@@ -13,7 +13,7 @@
        - noindex: la página es pública en GitHub Pages, pero no debe
          aparecer en buscadores.
        ============================================================ -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com; style-src 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebasestorage.app https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://recaptchaenterprise.googleapis.com https://content-firebaseappcheck.googleapis.com; frame-src https://cuidados-en-casa.firebaseapp.com https://accounts.google.com https://www.google.com; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com; style-src 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebasestorage.app https://firebasestorage.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://recaptchaenterprise.googleapis.com https://content-firebaseappcheck.googleapis.com; frame-src https://cuidados-en-casa.firebaseapp.com https://accounts.google.com https://www.google.com; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#0d9488">
@@ -627,7 +627,8 @@ const SIN_FOTO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
    externa. Se exige el formato data:image/... y se escapa siempre;
    cualquier otra cosa se sustituye por la imagen de reserva. */
 function safeImage(src){
-  return (typeof src === 'string' && /^data:image\/(png|jpeg|jpg|webp|gif|bmp|svg\+xml)[;,]/i.test(src))
+  return (typeof src === 'string' && (/^data:image\/(png|jpeg|jpg|webp|gif|bmp|svg\+xml)[;,]/i.test(src)
+    || /^https:\/\/firebasestorage\.googleapis\.com\//i.test(src)))
     ? escapeHtml(src) : SIN_FOTO;
 }
 
@@ -857,6 +858,11 @@ class ImageTools{
     ctx.drawImage(img, 0, 0, w, h);
     return { dataUrl:c.toDataURL('image/jpeg', this.QUALITY), width:w, height:h };
   }
+  static async jpegFile(dataUrl){
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    return new File([blob], 'foto.jpg', {type:'image/jpeg'});
+  }
   static bytes(d){ return d ? Math.round((d.length - d.indexOf(',') - 1) * 3 / 4) : 0; }
   static kb(d){ return Math.max(1, Math.round(this.bytes(d) / 1024)); }
 }
@@ -981,7 +987,7 @@ class Medication{
   constructor(o={}){ Object.assign(this,{
     id:uuid(), name:'', activeIngredient:'', dose:'', unit:'mg',
     presentation:'Comprimido', route:'Oral', times:[], indication:'', notes:'',
-    color:'#0d9488', active:true, stock:0, minStock:5, expiry:'', photo:'', lab:'', nationalCode:'',
+    color:'#0d9488', active:true, stock:0, minStock:5, expiry:'', photo:'', photoPath:'', lab:'', nationalCode:'',
     /* --- Pauta: no todos los tratamientos son diarios, ni programados --- */
     pattern:'diaria',   // 'diaria' | 'cada' | 'semana' | 'demanda' (sin horario)
     everyDays:2,        // intervalo para la pauta 'cada'
@@ -2581,10 +2587,15 @@ class App{
         <label class="full">Observaciones<textarea class="input" name="notes">${escapeHtml(m.notes)}</textarea></label>
         <div class="full drop" id="drop">
           <p><b>Foto del medicamento</b><br>
-            <span class="muted">Arrastra una imagen aquí o selecciónala. Se usa en la portada y en la ficha.</span></p>
-          <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="Foto del medicamento">
+            <span class="muted">Toma una foto con la cámara o elige una imagen. Se usa en la portada y en la ficha.</span></p>
+          <div class="actions" style="justify-content:center">
+            <label class="btn secondary small" for="photoCamera">Tomar foto</label>
+            <label class="btn secondary small" for="photoFile">Elegir imagen</label>
+          </div>
+          <input hidden type="file" id="photoCamera" accept="image/*" capture="environment" aria-label="Tomar foto del medicamento">
+          <input hidden type="file" id="photoFile" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="Elegir foto del medicamento">
           <p class="hint">JPG, PNG, WEBP, GIF o BMP · máximo 8 MB. Se reduce a 720 px y se eliminan
-            los metadatos (EXIF y ubicación) antes de guardarla.</p>
+            los metadatos (EXIF y ubicación) antes de subirla de forma privada a Firebase Storage.</p>
           <p class="err" id="photoErr" role="alert"></p>
           <div id="imgState"></div>
         </div>
@@ -2634,6 +2645,7 @@ class App{
             errEl.textContent = ex.message;
           }
         };
+        document.getElementById('photoCamera').onchange = e => load(e.target.files[0]);
         document.getElementById('photoFile').onchange = e => load(e.target.files[0]);
         drop.ondragover  = e => { e.preventDefault(); drop.classList.add('over'); };
         drop.ondragleave = () => drop.classList.remove('over');
@@ -2647,7 +2659,7 @@ class App{
       if(box) box.textContent = msg;
       if(field && field.setAttribute) field.setAttribute('aria-invalid', msg ? 'true' : 'false');
     };
-    form.onsubmit = e => {
+    form.onsubmit = async e => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(form));
       delete f.weekday;               // las casillas se leen aparte
@@ -2679,7 +2691,23 @@ class App{
       if(firstBad){ form.elements[firstBad]?.focus?.(); return; }
 
       Object.assign(m, f);
-      m.times = times; m.stock = +f.stock || 0; m.minStock = +f.minStock || 0; m.photo = image;
+      m.times = times; m.stock = +f.stock || 0; m.minStock = +f.minStock || 0;
+      if(this.mode === 'firebase' && image && image !== m.photo){
+        const saveButton = document.getElementById('saveMed');
+        saveButton.disabled = true;
+        saveButton.textContent = 'Subiendo foto…';
+        try{
+          const uploaded = await this.db.uploadMedPhoto(m.id, await ImageTools.jpegFile(image));
+          image = uploaded.url;
+          m.photoPath = uploaded.path;
+        }catch(ex){
+          document.getElementById('photoErr').textContent = 'No se pudo subir la foto: ' + (ex?.message || ex);
+          saveButton.disabled = false;
+          saveButton.textContent = 'Guardar medicamento';
+          return;
+        }
+      }
+      m.photo = image;
       m.pattern   = pattern;
       m.everyDays = cada;
       m.weekdays  = weekdays;
