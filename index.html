@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- ============================================================
        SEGURIDAD DE LA INFORMACIÓN (defensa en profundidad)
-       - CSP: sin scripts externos. connect-src 'self' permite leer
-         únicamente perfil.json del propio sitio: no hay ningún
-         destino externo al que se puedan enviar datos.
-       - object/frame/base/form-action bloqueados: sin incrustaciones
-         ni envíos de formulario a terceros.
+       - CSP: los únicos destinos externos permitidos son los de
+         Firebase/Google (SDK, Firestore, Auth y Storage). Todo lo
+         demás sigue restringido a 'self'.
+       - object/base/form-action bloqueados; frame-src solo permite
+         el iframe de autenticación de Firebase y el popup de Google.
        - noindex: la página es pública en GitHub Pages, pero no debe
          aparecer en buscadores.
        ============================================================ -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com; style-src 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebasestorage.app https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://recaptchaenterprise.googleapis.com; frame-src https://cuidados-en-casa.firebaseapp.com https://accounts.google.com https://www.google.com; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <meta name="theme-color" content="#3a5bd0">
+  <meta name="theme-color" content="#0d9488">
   <meta name="description" content="Cuida: seguimiento en casa de la medicación, los síntomas y el equipo de cuidado de una persona.">
   <title>Cuida · Seguimiento domiciliario</title>
   <style>
@@ -33,50 +33,68 @@
      ============================================================ */
 
   /* 1. TOKENS ------------------------------------------------- */
+  /* ----------------------------------------------------------
+     PALETA CLÍNICA · verde azulado (teal) sobre neutros pizarra.
+     Estados semánticos: administrada (verde), pendiente (ámbar),
+     alerta (rojo). Modo claro por defecto y oscuro AUTOMÁTICO.
+     ---------------------------------------------------------- */
   :root{
-    --bg:#f4f6fb;
+    --bg:#f4f7f8;          /* lienzo clínico frío */
     --surface:#ffffff;
-    --surface-2:#f8fafc;
-    --ink:#16202e;         /* texto principal */
-    --muted:#5a6478;       /* texto secundario · AA sobre superficie */
-    --line:#e2e8f2;
-    --primary:#3a5bd0;
+    --surface-2:#eef2f3;
+    --ink:#0f172a;         /* texto principal (pizarra) */
+    --muted:#566171;       /* texto secundario · AA sobre superficie */
+    --line:#e3e9ec;
+    --primary:#0d9488;     /* teal-600 */
     --primary-ink:#ffffff; /* texto sobre color primario */
-    --primary-soft:#eaf0ff;
-    --primary-soft-ink:#2b46b0;
-    --good:#0f6f52; --good-bg:#e6f6ef;
-    --warn:#92500a; --warn-bg:#fff3df;
-    --bad:#b31f3f;  --bad-bg:#ffe9ee;
-    --focus:#1746e0;
-    --radius:14px;
-    --shadow:0 8px 26px rgba(29,46,74,.08);
+    --primary-soft:#d6f2ec;
+    --primary-soft-ink:#0f6e56;
+    --good:#15803d; --good-bg:#e6f6ec;   /* administrada */
+    --warn:#92500a; --warn-bg:#fbeed3;   /* pendiente */
+    --bad:#b91c1c;  --bad-bg:#fbe6e6;    /* alerta */
+    --focus:#0f766e;
+    --radius:12px;
+    --shadow:0 6px 20px rgba(15,55,50,.07);
     /* Tipografía fluida: escala con el viewport dentro de límites */
     --fs-base:clamp(15px, 0.9rem + 0.2vw, 17px);
     --fs-h1:clamp(1.35rem, 1.1rem + 1.4vw, 1.75rem);
     --fs-h2:clamp(1.05rem, 0.98rem + 0.4vw, 1.2rem);
     --tap:44px; /* tamaño táctil mínimo (WCAG) */
   }
-  /* Tema oscuro */
+  /* Tokens del tema oscuro (los usan el modo automático y el manual) */
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e1a1c; --surface:#132427; --surface-2:#17292d;
+      --ink:#e7eef0; --muted:#a2b3b6; --line:#26393d;
+      --primary:#2dd4bf; --primary-ink:#04211d;
+      --primary-soft:#123a34; --primary-soft-ink:#8ee9d8;
+      --good:#4ade80; --good-bg:#0f3321;
+      --warn:#fbbf24; --warn-bg:#3a2c10;
+      --bad:#f87171;  --bad-bg:#3a1719;
+      --focus:#5eead4; --shadow:none;
+    }
+  }
+  /* Modo oscuro forzado desde Ajustes (gana sobre el automático) */
   body.dark{
-    --bg:#0f1726; --surface:#172133; --surface-2:#1c2740;
-    --ink:#e8eef8; --muted:#a9b7cd; --line:#2b3a54;
-    --primary:#6f8cff; --primary-ink:#0b1120;
-    --primary-soft:#26365f; --primary-soft-ink:#cdd9ff;
-    --good:#4fd6a6; --good-bg:#123a30;
-    --warn:#f2b24a; --warn-bg:#3a2c12;
-    --bad:#ff8098;  --bad-bg:#3a1420;
-    --focus:#9db4ff; --shadow:none;
+    --bg:#0e1a1c; --surface:#132427; --surface-2:#17292d;
+    --ink:#e7eef0; --muted:#a2b3b6; --line:#26393d;
+    --primary:#2dd4bf; --primary-ink:#04211d;
+    --primary-soft:#123a34; --primary-soft-ink:#8ee9d8;
+    --good:#4ade80; --good-bg:#0f3321;
+    --warn:#fbbf24; --warn-bg:#3a2c10;
+    --bad:#f87171;  --bad-bg:#3a1719;
+    --focus:#5eead4; --shadow:none;
   }
   /* Alto contraste (negro sobre blanco, bordes marcados) */
   body.high{
     --bg:#ffffff; --surface:#ffffff; --surface-2:#ffffff;
     --ink:#000000; --muted:#1a1a1a; --line:#000000;
-    --primary:#0000c4; --primary-ink:#ffffff;
-    --primary-soft:#dfe4ff; --primary-soft-ink:#0000a0;
+    --primary:#0a4f43; --primary-ink:#ffffff;
+    --primary-soft:#d6f2ec; --primary-soft-ink:#063b31;
     --good:#005c3c; --good-bg:#dff5ec;
     --warn:#7a3d00; --warn-bg:#fff0d6;
     --bad:#a5001f;  --bad-bg:#ffe0e6;
-    --focus:#0000c4; --shadow:none;
+    --focus:#0a4f43; --shadow:none;
   }
   /* Fuente y controles grandes */
   body.large{ --fs-base:19px; --tap:52px; }
@@ -120,30 +138,31 @@
   .app{ min-height:100vh; display:grid; grid-template-columns:240px 1fr; }
 
   .side{
-    background:linear-gradient(180deg,#1c2a4e,#111a30); color:#fff; padding:22px 14px;
+    background:#10312c; color:#fff; padding:22px 14px;
+    border-right:1px solid rgba(255,255,255,.06);
     position:sticky; top:0; height:100vh; display:flex; flex-direction:column;
   }
-  body.dark .side{ background:linear-gradient(180deg,#101a30,#0a1120); }
+  body.dark .side{ background:#0a201d; }
   body.high .side{ background:#000; }
-  .brand{ display:flex; align-items:center; gap:10px; font-size:1.4rem; font-weight:800; margin:0 8px 24px; }
+  .brand{ display:flex; align-items:center; gap:10px; font-size:1.35rem; font-weight:700; margin:0 8px 26px; }
   .brand i{
     width:38px; height:38px; border-radius:11px;
-    background:linear-gradient(135deg,var(--primary),#6f8cff); box-shadow:0 6px 16px rgba(58,91,208,.45);
+    background:#0d9488; box-shadow:0 4px 12px rgba(13,148,136,.4);
     color:#fff; display:grid; place-items:center; font-style:normal; font-size:1.1rem;
   }
   .nav a .ic svg{ display:block; }
   .nav{ display:flex; flex-direction:column; gap:4px; }
   .nav a{
     display:flex; align-items:center; gap:12px; min-height:var(--tap);
-    padding:10px 14px; border-radius:10px; color:#cbd5e1;
+    padding:10px 14px; border-radius:10px; color:#c4dcd6;
     text-decoration:none; font-weight:600;
   }
   .nav a .ic{ width:22px; height:22px; display:grid; place-items:center; flex:none; }
-  .nav a:hover{ background:rgba(255,255,255,.12); color:#fff; }
-  .nav a[aria-current="page"]{ background:var(--primary); color:#fff; }
+  .nav a:hover{ background:rgba(255,255,255,.10); color:#fff; }
+  .nav a[aria-current="page"]{ background:#0d9488; color:#fff; }
   body.high .nav a{ color:#fff; }
   body.high .nav a[aria-current="page"]{ background:#fff; color:#000; }
-  .side-foot{ margin-top:auto; color:#9fb0cc; font-size:.8rem; padding:12px 8px 0; }
+  .side-foot{ margin-top:auto; color:#8fb3ab; font-size:.8rem; padding:12px 8px 0; }
 
   .main{ min-width:0; display:flex; flex-direction:column; }
   .top{
@@ -179,6 +198,25 @@
   .stats{ grid-template-columns:repeat(4,1fr); }
   .two{ grid-template-columns:1.3fr .7fr; }
 
+  /* Encabezado compacto del panel (enfoque de seguimiento clínico) */
+  .compact-head{ margin-bottom:16px; }
+  .dash-h1{ margin:0; font-size:clamp(1.15rem,1rem+0.6vw,1.4rem); }
+
+  /* Métricas compactas: fila densa en lugar de tarjetas grandes */
+  .metrics{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .stat-mini{
+    display:flex; align-items:center; gap:10px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:10px 12px;
+  }
+  .stat-mini .icon{
+    width:34px; height:34px; border-radius:9px; flex:none;
+    background:var(--primary-soft); color:var(--primary-soft-ink);
+    display:grid; place-items:center; font-size:1rem;
+  }
+  .stat-mini .n{ font-size:1.35rem; font-weight:700; line-height:1.1; }
+  .stat-mini .label{ font-size:.76rem; color:var(--muted); }
+
   .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
   .card > b{ display:block; margin-bottom:6px; }
 
@@ -188,7 +226,7 @@
   .stat .icon{ position:absolute; top:16px; right:16px; background:var(--primary-soft); color:var(--primary-soft-ink); padding:8px; border-radius:10px; width:38px; height:38px; display:grid; place-items:center; }
 
   .progress{ height:10px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:12px; }
-  .progress i{ display:block; height:100%; background:linear-gradient(90deg,var(--primary),#5aa9d6); border-radius:inherit; }
+  .progress i{ display:block; height:100%; background:var(--primary); border-radius:inherit; }
 
   .next{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:14px; }
   .med-icon{ width:58px; height:58px; border-radius:13px; object-fit:cover; background:var(--primary-soft); }
@@ -201,11 +239,14 @@
   /* Botones: enlaces navegan, botones actúan */
   .btn{
     display:inline-flex; align-items:center; justify-content:center; gap:6px;
-    min-height:var(--tap); padding:10px 15px; border:1px solid transparent; border-radius:10px;
-    background:var(--primary); color:var(--primary-ink); font-weight:700; cursor:pointer; text-decoration:none;
+    min-height:var(--tap); padding:10px 16px; border:1px solid transparent; border-radius:var(--radius);
+    background:var(--primary); color:var(--primary-ink); font-weight:600; cursor:pointer; text-decoration:none;
+    transition:filter .15s ease, background .15s ease, border-color .15s ease;
   }
   .btn:hover{ filter:brightness(.95); }
-  .btn.secondary{ background:var(--primary-soft); color:var(--primary-soft-ink); }
+  /* Secundario tipo contorno: jerarquía clínica clara frente al primario */
+  .btn.secondary{ background:var(--surface); color:var(--ink); border-color:var(--line); }
+  .btn.secondary:hover{ background:var(--surface-2); filter:none; }
   .btn.danger{ background:var(--bad-bg); color:var(--bad); border-color:transparent; }
   /* Botón de WhatsApp: verde de marca oscurecido para cumplir contraste AA */
   .btn.wa{ background:#0b6b5f; color:#fff; }
@@ -271,11 +312,11 @@
 
   /* --- Cuidadores: avatares, chips y selección múltiple --- */
   .card.hover{ transition:transform .15s ease, box-shadow .15s ease; }
-  .card.hover:hover{ transform:translateY(-2px); box-shadow:0 14px 34px rgba(29,46,74,.14); }
+  .card.hover:hover{ transform:translateY(-2px); box-shadow:0 12px 30px rgba(15,55,50,.14); }
   .cargrid{ grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); }
   .avatar{
     width:46px; height:46px; border-radius:50%; flex:none; display:grid; place-items:center;
-    font-weight:800; color:#fff; background:linear-gradient(135deg,var(--primary),#6f8cff);
+    font-weight:700; color:#fff; background:var(--primary);
   }
   .avatar.sm{ width:30px; height:30px; font-size:.72rem; }
   .car-head{ display:flex; align-items:center; gap:12px; }
@@ -340,14 +381,24 @@
     .main{ padding-bottom:76px; } /* espacio para la barra inferior */
     .top{ padding:12px 16px; }
     .stats{ grid-template-columns:repeat(2,1fr); }
+    .metrics{ grid-template-columns:repeat(2,1fr); }
     .two{ grid-template-columns:1fr; }
     .agenda-card{ grid-template-columns:56px 46px 1fr; }
     .agenda-card .actions{ grid-column:1/-1; }
   }
 
+  /* Tabletas en vertical: evita líneas demasiado largas y conserva acciones
+     cómodas sin activar todavía la navegación móvil. */
+  @media (min-width:561px) and (max-width:860px){
+    .content{ max-width:780px; }
+    .top .clock{ white-space:nowrap; }
+    .cargrid{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+
   /* Tablas apiladas tipo tarjeta en pantallas pequeñas (mejor lectura móvil) */
   @media (max-width:560px){
     .stats{ grid-template-columns:1fr; }
+    .metrics{ grid-template-columns:repeat(2,1fr); }
     .form{ grid-template-columns:1fr; }
     .title-row .btn{ width:100%; }
     .table thead{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
@@ -356,6 +407,32 @@
     .table td{ border:0; display:flex; justify-content:space-between; gap:12px; padding:8px 0; text-align:right; }
     .table td::before{ content:attr(data-label); font-weight:700; color:var(--muted); text-align:left; }
     .table td .med-row{ justify-content:flex-end; }
+  }
+
+  /* Teléfonos estrechos (320–390 px): no se corta el encabezado, los botones
+     ni la barra inferior; se prioriza contenido y objetivos táctiles. */
+  @media (max-width:390px){
+    .top{ min-height:58px; padding:8px 12px; gap:8px; }
+    .top .who{ font-size:.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .clock{ font-size:.75rem; }
+    .clock strong{ display:block; margin:0; font-size:.95rem; }
+    .content{ padding:16px 12px; }
+    .card{ padding:14px; }
+    .nav a{ min-width:54px; font-size:.62rem; }
+    .metrics{ gap:8px; }
+    .stat-mini{ padding:9px; gap:7px; }
+    .stat-mini .icon{ width:30px; height:30px; }
+    .agenda-card{ grid-template-columns:50px 40px 1fr; gap:8px; }
+    .modal-backdrop{ padding:10px; }
+    .dialog{ padding:18px; }
+  }
+
+  /* Escritorios amplios: una lectura más descansada sin estirar el contenido
+     clínico indefinidamente. */
+  @media (min-width:1440px){
+    .app{ grid-template-columns:264px 1fr; }
+    .content{ max-width:1320px; padding:32px; }
+    .top{ padding-inline:32px; }
   }
 
   /* 7. SEGURIDAD: PANTALLA DE BLOQUEO ------------------------- */
@@ -374,8 +451,8 @@
   }
   .lock-logo{
     width:54px; height:54px; border-radius:16px; display:grid; place-items:center;
-    background:linear-gradient(135deg,var(--primary),#6f8cff); color:#fff; font-size:1.5rem;
-    margin-bottom:16px; box-shadow:0 8px 20px rgba(58,91,208,.4);
+    background:var(--primary); color:#fff; font-size:1.5rem;
+    margin-bottom:16px; box-shadow:0 8px 20px rgba(13,148,136,.4);
   }
   .lock-box h1{ margin:0 0 6px; font-size:1.3rem; }
   .pin{ letter-spacing:.5em; text-align:center; font-size:1.35rem; font-weight:700; }
@@ -445,7 +522,7 @@
     <aside class="side">
       <div class="brand"><i aria-hidden="true">✚</i> Cuida</div>
       <nav class="nav" id="nav" aria-label="Secciones"></nav>
-      <p class="side-foot">Los datos no salen de este dispositivo.<br>Sin servidor ni base de datos externa.</p>
+      <p class="side-foot" id="sideFoot">Los datos no salen de este dispositivo.<br>Sin servidor ni base de datos externa.</p>
     </aside>
 
     <div class="main">
@@ -541,7 +618,7 @@ function prettyDate(iso){
 
 /* Imagen de reserva cuando un medicamento no tiene foto */
 const SIN_FOTO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" fill="#eaf0ff"/>' +
+  '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" fill="#d6f2ec"/>' +
   '<path d="M58 66h64v58H58z" fill="none" stroke="#8fa6e6" stroke-width="6" rx="8"/>' +
   '<circle cx="78" cy="88" r="9" fill="#8fa6e6"/><path d="M60 118l26-24 20 18 14-12 22 22" fill="none" stroke="#8fa6e6" stroke-width="6"/></svg>');
 
@@ -653,7 +730,6 @@ class Vault{
 class Profile{
   static FILE  = 'perfil.json';
   static CACHE = 'cuida-cache-cifrada';
-  static AUTOLOCK = 'cuida-autobloqueo';
 
   /* Perfil publicado en el sitio; null si aún no se ha publicado ninguno */
   static async published(){
@@ -683,13 +759,17 @@ class Profile{
 
 /* ------------------------------------------------------------
    PinLock · Bloqueo de pantalla
-   El PIN NO se guarda: se guarda su derivación PBKDF2 con sal.
+   La configuración del PIN vive DENTRO del perfil central (state.pin),
+   nunca por dispositivo: así es el mismo en todas las cuentas.
+   El PIN en sí no se guarda, solo su derivación PBKDF2 con sal.
+   Los intentos fallidos son efímeros (solo memoria, no se persisten).
    Comparación en tiempo constante y retardo progresivo por fallos.
    Nota: protege el acceso visual, no cifra los datos guardados.
    ------------------------------------------------------------ */
 class PinLock{
-  constructor(){ this.key='cuida-pin'; this.kFails='cuida-pin-fallos'; this.kLast='cuida-pin-ultimo'; }
-  config(){ try{ return JSON.parse(localStorage.getItem(this.key)); }catch{ return null; } }
+  constructor(app){ this.app = app; this._fails = 0; this._last = 0; }
+  /* La configuración se lee del perfil descifrado en memoria */
+  config(){ return (this.app.state && this.app.state.pin) || null; }
   enabled(){ return !!this.config(); }
 
   async digest(pin, salt, iterations){
@@ -698,16 +778,22 @@ class PinLock{
     return B64.from(bits);
   }
   async set(pin){
+    if(!this.app.state) return;
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iterations = Vault.ITERATIONS;
-    localStorage.setItem(this.key, JSON.stringify({
+    this.app.state.pin = {
       salt:B64.from(salt), iterations,
       hash: await this.digest(pin, salt, iterations),
       createdAt: new Date().toISOString()
-    }));
+    };
     this.resetFails();
+    this.app.save();   // el PIN pasa a formar parte del perfil central
   }
-  clear(){ localStorage.removeItem(this.key); this.resetFails(); }
+  clear(){
+    if(this.app.state) delete this.app.state.pin;
+    this.resetFails();
+    this.app.save();
+  }
   async verify(pin){
     const c = this.config(); if(!c) return true;
     return this.equalTime(await this.digest(pin, B64.to(c.salt), c.iterations), c.hash);
@@ -718,18 +804,14 @@ class PinLock{
     let d = 0; for(let i=0;i<a.length;i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
     return d === 0;
   }
-  fails(){ return +(localStorage.getItem(this.kFails) || 0); }
-  addFail(){
-    const n = this.fails() + 1;
-    localStorage.setItem(this.kFails, n); localStorage.setItem(this.kLast, Date.now());
-    return n;
-  }
-  resetFails(){ localStorage.removeItem(this.kFails); localStorage.removeItem(this.kLast); }
+  fails(){ return this._fails; }
+  addFail(){ this._last = Date.now(); return ++this._fails; }
+  resetFails(){ this._fails = 0; this._last = 0; }
   /* Espera obligatoria tras 3 fallos: 5 s, 15 s, 45 s… hasta 5 min */
   waitMs(){
-    const n = this.fails(); if(n < 3) return 0;
+    const n = this._fails; if(n < 3) return 0;
     const espera = Math.min(5000 * Math.pow(3, n - 3), 300000);
-    return Math.max(0, espera - (Date.now() - (+localStorage.getItem(this.kLast) || 0)));
+    return Math.max(0, espera - (Date.now() - this._last));
   }
 }
 
@@ -899,7 +981,7 @@ class Medication{
   constructor(o={}){ Object.assign(this,{
     id:uuid(), name:'', activeIngredient:'', dose:'', unit:'mg',
     presentation:'Comprimido', route:'Oral', times:[], indication:'', notes:'',
-    color:'#3a5bd0', active:true, stock:0, minStock:5, expiry:'', photo:'', lab:'', nationalCode:'',
+    color:'#0d9488', active:true, stock:0, minStock:5, expiry:'', photo:'', lab:'', nationalCode:'',
     /* --- Pauta: no todos los tratamientos son diarios, ni programados --- */
     pattern:'diaria',   // 'diaria' | 'cada' | 'semana' | 'demanda' (sin horario)
     everyDays:2,        // intervalo para la pauta 'cada'
@@ -1145,7 +1227,7 @@ class App{
     Modal.init();
     this.store  = new StorageManager();
     this.notify = new NotificationManager();
-    this.pin    = new PinLock();
+    this.pin    = new PinLock(this);
     this.locked = false;
     this.mode   = 'local';   // 'local' = solo este navegador · 'perfil' = perfil cifrado publicado
     this.pass   = null;      // clave de acceso: solo en memoria, nunca se guarda
@@ -1195,6 +1277,91 @@ class App{
     this.backupReminder();
   }
 
+  /* ============================================================
+     MODO FIREBASE · datos centralizados en la nube (Firestore)
+     Un ÚNICO registro para todas las cuentas autorizadas: nada por
+     sesión ni por dispositivo. El login con Google es la puerta.
+     ============================================================ */
+  bootAnyway(){ if(this._booted) return; this._booted = true; this.start(); }
+
+  startFirebase(db){
+    this.db = db;
+    this.mode = 'firebase';
+    this._fbIds = {};
+    this.initLock();
+    db.onAuth(user => user ? this.firebaseLoad() : this.firebaseGate());
+  }
+
+  /* Puerta de acceso: login con Google (solo cuentas autorizadas) */
+  firebaseGate(mensaje){
+    this.locked = true;
+    document.body.classList.add('locked');
+    this.lockEl = document.getElementById('lock');
+    this.lockEl.hidden = false;
+    const box = this.lockEl.querySelector('.lock-box');
+    box.innerHTML = `
+      <div class="lock-logo" aria-hidden="true">✚</div>
+      <h1 id="lockTitle">Cuida</h1>
+      <p class="muted">Inicia sesión con tu cuenta autorizada para ver la información.</p>
+      <p class="err" id="gErr" role="alert" aria-live="assertive">${escapeHtml(mensaje || '')}</p>
+      <div class="lock-foot">
+        <button class="btn" type="button" id="gGoogle">Entrar con Google</button>
+      </div>
+      <p class="muted" style="font-size:.8rem;margin-top:16px">
+        Los datos están centralizados en la nube y protegidos: solo las cuentas
+        autorizadas pueden verlos o modificarlos.</p>`;
+    document.getElementById('gGoogle').onclick = () =>
+      this.db.signIn().catch(e => this.firebaseGate('No se pudo entrar: ' + (e?.message || e)));
+  }
+
+  /* Carga el registro central y pinta la app */
+  async firebaseLoad(){
+    try{
+      this.state = await this.db.loadState();
+    }catch(e){
+      this.firebaseGate('No se pudo cargar: ' + (e?.message || e)); return;
+    }
+    this.migrate();
+    this._fbIds = {
+      medicamentos: new Set(this.state.medications.map(m => m.id)),
+      cuidadores:   new Set(this.state.caregivers.map(c => c.id)),
+    };
+    this.locked = false;
+    document.body.classList.remove('locked');
+    this.lockEl.hidden = true;
+    this.touch();
+    const foot = document.getElementById('sideFoot');
+    if(foot) foot.innerHTML = 'Datos centralizados en la nube.<br>Solo cuentas autorizadas.';
+    this.buildNav();
+    this.render();
+  }
+
+  /* Guardado en la nube: se agrupan las ráfagas de cambios */
+  firebaseSync(){
+    clearTimeout(this._fbTimer);
+    this._fbTimer = setTimeout(() => this.firebaseSyncNow(), 800);
+  }
+  async firebaseSyncNow(){
+    const s = this.state, db = this.db, ops = [];
+    ops.push(db.savePatient(s.patient), db.saveSettings(s.settings),
+             db.saveAgenda(s.agendaDate, s.agenda));
+    // Reconciliar medicamentos y cuidadores (altas, cambios y BAJAS)
+    const recon = (name, arr, up, del) => {
+      const ahora = new Set(arr.map(x => x.id));
+      arr.forEach(x => ops.push(up(x)));
+      (this._fbIds[name] || new Set()).forEach(id => { if(!ahora.has(id)) ops.push(del(id)); });
+      this._fbIds[name] = ahora;
+    };
+    recon('medicamentos', s.medications, m => db.saveMedication(m), id => db.deleteMedication(id));
+    recon('cuidadores',   s.caregivers,  c => db.saveCaregiver(c),  id => db.deleteCaregiver(id));
+    // Registros (solo altas)
+    s.symptoms.forEach(x => ops.push(db.addSymptom(x)));
+    s.rescues .forEach(x => ops.push(db.addRescue(x)));
+    s.history .forEach(x => ops.push(db.addHistory(x)));
+    try{ await Promise.all(ops); }
+    catch(e){ toast('No se pudo guardar en la nube: ' + (e?.message || e), 'bad', 8000); }
+  }
+
   /* Compatibilidad con datos y respaldos de versiones anteriores */
   migrate(){
     this.state.patient    = new Patient(this.state.patient);
@@ -1204,10 +1371,23 @@ class App{
     this.state.rescues  = this.state.rescues  || [];
     this.state.history  = this.state.history  || [];
     this.state.agenda   = this.state.agenda   || [];
+    // El autobloqueo deja de vivir por dispositivo: si hay un valor heredado
+    // en localStorage y el perfil aún no lo trae, se conserva una única vez.
+    const settingsPrevias = this.state.settings || {};
+    const alHeredado = localStorage.getItem('cuida-autobloqueo');
+    if(alHeredado != null && settingsPrevias.autolock == null) settingsPrevias.autolock = +alHeredado;
     this.state.settings = Object.assign(
       { dark:false, large:false, high:false, sound:false, notifications:false,
         autolock:5, medView:'tabla', lastBackup:'', whatsapp:true },
-      this.state.settings || {});
+      settingsPrevias);
+
+    // El PIN deja de vivir por dispositivo y pasa al perfil central (state.pin).
+    // Se importa el heredado una sola vez y se borran las claves por dispositivo.
+    const pinHeredado = localStorage.getItem('cuida-pin');
+    if(pinHeredado && !this.state.pin){ try{ this.state.pin = JSON.parse(pinHeredado); }catch{} }
+    ['cuida-pin','cuida-pin-fallos','cuida-pin-ultimo','cuida-autobloqueo']
+      .forEach(k => localStorage.removeItem(k));
+
     this.syncAgenda();
   }
 
@@ -1239,11 +1419,10 @@ class App{
   }
   touch(){ this.lastActivity = Date.now(); }
 
-  /* Minutos de inactividad; en modo perfil el ajuste se guarda aparte,
-     porque al bloquear se descarta todo el estado descifrado. */
+  /* Minutos de inactividad; el ajuste vive dentro del perfil central.
+     Sin perfil descifrado en memoria no hay nada abierto que bloquear. */
   autolockMinutes(){
-    if(this.state && this.state.settings) return +this.state.settings.autolock || 0;
-    return +(localStorage.getItem(Profile.AUTOLOCK) ?? 5);
+    return (this.state && this.state.settings) ? +this.state.settings.autolock || 0 : 0;
   }
   checkIdle(){
     const min = this.autolockMinutes();
@@ -1487,9 +1666,8 @@ class App{
   save(){
     if(!this.state) return {ok:false};
     this.state.updatedAt = new Date().toISOString();
-    // El tiempo de autobloqueo se guarda aparte: hace falta ANTES de descifrar
-    if(this.state.settings) localStorage.setItem(Profile.AUTOLOCK, this.state.settings.autolock ?? 5);
 
+    if(this.mode === 'firebase'){ this.firebaseSync(); return {ok:true}; }
     if(this.mode === 'perfil'){ this.persistEncrypted(); return {ok:true}; }
 
     const r = this.store.save(this.state);
@@ -1634,14 +1812,20 @@ class App{
     // Comparación en fecha local: con UTC, a partir de las 7 p. m. contaba mal
     const symToday = this.state.symptoms.filter(x => isoDate(new Date(x.date)) === isoDate()).length;
     const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
-    return this.title(this.greeting(),
-      this.state.patient.diagnosis || 'Seguimiento de la medicación en casa')
+    const fechaCap = fecha.charAt(0).toUpperCase() + fecha.slice(1);
+    const nombre = this.state.patient.name || 'Panel de hoy';
+    return `<header class="title-row compact-head">
+        <div>
+          <h1 class="dash-h1">${escapeHtml(nombre)}</h1>
+          <p class="sub">${escapeHtml(fechaCap)}</p>
+        </div>
+      </header>`
       + this.onboardingHTML() + `
-      <div class="grid stats">
-        <div class="card stat"><span class="icon" aria-hidden="true">◷</span><div class="label">Pendientes hoy</div><div class="n">${this.pending()}</div></div>
-        <div class="card stat"><span class="icon" aria-hidden="true">✓</span><div class="label">Administrados</div><div class="n">${done}</div></div>
-        <div class="card stat"><span class="icon" aria-hidden="true">!</span><div class="label">Alertas</div><div class="n">${alerts.length}</div></div>
-        <div class="card stat"><span class="icon" aria-hidden="true">♡</span><div class="label">Síntomas hoy</div><div class="n">${symToday}</div></div>
+      <div class="metrics">
+        <div class="stat-mini"><span class="icon" aria-hidden="true">◷</span><div><div class="n">${this.pending()}</div><div class="label">Pendientes hoy</div></div></div>
+        <div class="stat-mini"><span class="icon" aria-hidden="true">✓</span><div><div class="n">${done}</div><div class="label">Administrados</div></div></div>
+        <div class="stat-mini"><span class="icon" aria-hidden="true">!</span><div><div class="n">${alerts.length}</div><div class="label">Alertas</div></div></div>
+        <div class="stat-mini"><span class="icon" aria-hidden="true">♡</span><div><div class="n">${symToday}</div><div class="label">Síntomas hoy</div></div></div>
       </div>
       <div class="grid two" style="margin-top:18px">
         <div class="card">
@@ -1884,7 +2068,7 @@ class App{
 
   /* --- Vista de cuidadores (cada uno con varios medicamentos) --- */
   caregiversHTML(){
-    const medChip = m => `<span class="chip"><span class="dot" style="background:${escapeHtml(m.color||'#3a5bd0')}"></span>${escapeHtml(m.name)}</span>`;
+    const medChip = m => `<span class="chip"><span class="dot" style="background:${escapeHtml(m.color||'#0d9488')}"></span>${escapeHtml(m.name)}</span>`;
     const cards = this.state.caregivers.map(c => {
       const meds = c.medIds.map(id=>this.med(id)).filter(Boolean);
       return `<div class="card car-card hover">
@@ -2031,8 +2215,8 @@ class App{
           <span class="dot-state ${activo?'on':''}" aria-hidden="true"></span>
           <span>${activo ? 'Bloqueo con PIN activado' : 'Bloqueo con PIN desactivado'}</span>
         </div>
-        <p class="muted">El PIN protege el acceso a la información en este dispositivo.
-          No se guarda en ningún sitio: solo una huella PBKDF2-SHA256 con sal, imposible de revertir.</p>
+        <p class="muted">El PIN forma parte del perfil central, así que es el mismo en todas las cuentas
+          y dispositivos. No se guarda el PIN en sí: solo una huella PBKDF2-SHA256 con sal, imposible de revertir.</p>
         ${SECURE ? '' : `<div class="alert bad"><b>Funciones de seguridad no disponibles</b><br>
           <small>Has abierto el archivo directamente (file://). El PIN y el respaldo cifrado necesitan
           https:// o localhost. Publica el sitio en GitHub Pages o ábrelo con un servidor local.</small></div>`}
@@ -2618,7 +2802,7 @@ class App{
     const checks = this.state.medications.map(m => `
       <label class="check">
         <input type="checkbox" name="med" value="${m.id}" ${c.medIds.includes(m.id)?'checked':''}>
-        <span class="dot" style="background:${escapeHtml(m.color||'#3a5bd0')}"></span>${escapeHtml(m.name)}
+        <span class="dot" style="background:${escapeHtml(m.color||'#0d9488')}"></span>${escapeHtml(m.name)}
       </label>`).join('') || '<span class="muted">No hay medicamentos. Crea alguno en Tratamiento.</span>';
     Modal.open(`
       <h2 id="dialogTitle">${edit?'Editar':'Nuevo'} cuidador</h2>
@@ -3107,7 +3291,20 @@ git push</textarea>
 }
 
 const app = new App();
-const ready = app.start();
+window.__cuidaApp = app;
+/* Arranque: se intenta el modo Firebase (datos centralizados en la nube).
+   Si el módulo, la config o la red no están disponibles, se cae al modo
+   anterior (perfil cifrado o local) sin dejar la app en blanco.
+   import() dinámico funciona dentro de un <script> clásico. */
+import('./firebase/db.js')
+  .then(async ({ CuidaDB }) => {
+    await CuidaDB.init();
+    if(!app._booted){ app._booted = true; app.startFirebase(CuidaDB); }
+  })
+  .catch(err => {
+    console.warn('Firebase no disponible; se usa el modo anterior:', err?.message || err);
+    app.bootAnyway();
+  });
 </script>
 </body>
 </html>

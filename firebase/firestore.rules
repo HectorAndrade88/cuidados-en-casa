@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Reglas de Firestore para "cuidados-en-casa" (Modelo 2).
+// Solo las cuentas Google de la lista pueden leer y escribir. Nadie más entra,
+// aunque conozca la URL del proyecto.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ⬇️ REEMPLAZA por los correos Google autorizados (cuidadores/familia).
+    function autorizado() {
+      return request.auth != null && request.auth.token.email in [
+        'publicidadescarlata@gmail.com'
+        // , 'otro-cuidador@gmail.com'
+      ];
+    }
+
+    match /{document=**} {
+      allow read, write: if autorizado();
+    }
+  }
+}
