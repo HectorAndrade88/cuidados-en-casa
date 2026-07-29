@@ -22,7 +22,8 @@ import {
   initializeAppCheck, ReCaptchaEnterpriseProvider
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+  signOut, onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, deleteDoc,
@@ -95,7 +96,28 @@ class CuidaDBClass{
   /* Notifica login/logout. Devuelve función para dejar de escuchar. */
   onAuth(cb){ return onAuthStateChanged(this.auth, u => { this.user = u; cb(u); }); }
   async signIn(){
+    const ua = navigator.userAgent || '';
+    /* Los navegadores integrados de mensajería no ofrecen el almacenamiento
+       temporal que requiere el handler OAuth de Firebase. */
+    if(/WhatsApp|FBAN|FBAV|Instagram|Line\//i.test(ua)){
+      const error = new Error('Abre este enlace en Safari, Edge o Chrome; el navegador integrado de WhatsApp no permite iniciar sesión con Google.');
+      error.code = 'auth/unsupported-webview';
+      throw error;
+    }
+    try{
+      const probe = '__cuida_auth_probe__';
+      sessionStorage.setItem(probe, '1'); sessionStorage.removeItem(probe);
+    }catch{
+      const error = new Error('Este navegador no permite el almacenamiento necesario para iniciar sesión. Abre la página en Safari, Edge o Chrome.');
+      error.code = 'auth/web-storage-unsupported';
+      throw error;
+    }
     const prov = new GoogleAuthProvider();
+    // En móviles, la redirección es más fiable que una ventana emergente.
+    if(/Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(ua)){
+      await signInWithRedirect(this.auth, prov);
+      return null;
+    }
     const cred = await signInWithPopup(this.auth, prov);
     this.user = cred.user;
     return cred.user;

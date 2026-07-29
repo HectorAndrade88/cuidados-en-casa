@@ -1311,7 +1311,7 @@ class App{
         Los datos están centralizados en la nube y protegidos: solo las cuentas
         autorizadas pueden verlos o modificarlos.</p>`;
     document.getElementById('gGoogle').onclick = () =>
-      this.db.signIn().catch(e => this.firebaseGate('No se pudo entrar: ' + (e?.message || e)));
+      this.db.signIn().catch(e => this.firebaseGate(e?.message || 'No se pudo iniciar sesión.'));
   }
 
   /* Carga el registro central y pinta la app */
@@ -1737,12 +1737,22 @@ class App{
     this.markActive();
     this.bind();
     this.updateTopPatient();
-    // Botón de bloqueo rápido: solo si hay PIN configurado
+    // En modo Firebase, bloquear equivale a cerrar la sesión de Google.
     const tl = document.getElementById('topLock');
-    // Firebase Authentication es la única puerta de acceso en modo nube.
-    // El bloqueo PIN heredado no se ofrece ni se aplica a esta versión.
-    if(tl){ tl.hidden = true; tl.onclick = null; }
+    if(tl){
+      tl.hidden = this.mode !== 'firebase';
+      tl.textContent = 'Bloquear';
+      tl.onclick = this.mode === 'firebase' ? () => this.firebaseLock() : null;
+    }
     main.focus({preventScroll:true});
+  }
+  async firebaseLock(){
+    try{
+      await this.db.signOut();
+      toast('Sesión cerrada. Inicia sesión con Google para volver a entrar.', 'good');
+    }catch(e){
+      toast('No se pudo bloquear la sesión: ' + (e?.message || e), 'bad');
+    }
   }
   renderIfDashboard(){ if(this.page==='dashboard') this.render(); }
 
