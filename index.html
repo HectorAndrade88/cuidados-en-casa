@@ -16,7 +16,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com; style-src 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebasestorage.app https://firebasestorage.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://recaptchaenterprise.googleapis.com https://content-firebaseappcheck.googleapis.com; frame-src https://cuidados-en-casa.firebaseapp.com https://accounts.google.com https://www.google.com; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <meta name="theme-color" content="#0d9488">
+  <meta name="theme-color" content="#007fa8">
   <meta name="description" content="Cuida: seguimiento en casa de la medicación, los síntomas y el equipo de cuidado de una persona.">
   <title>Cuida · Seguimiento domiciliario</title>
   <style>
@@ -34,27 +34,27 @@
 
   /* 1. TOKENS ------------------------------------------------- */
   /* ----------------------------------------------------------
-     PALETA CLÍNICA · verde azulado (teal) sobre neutros pizarra.
+     PALETA TECNOLÓGICA · azul profundo y cian luminoso.
      Estados semánticos: administrada (verde), pendiente (ámbar),
      alerta (rojo). Modo claro por defecto y oscuro AUTOMÁTICO.
      ---------------------------------------------------------- */
   :root{
-    --bg:#f4f7f8;          /* lienzo clínico frío */
+    --bg:#edf8fc;          /* azul hielo luminoso */
     --surface:#ffffff;
-    --surface-2:#eef2f3;
-    --ink:#0f172a;         /* texto principal (pizarra) */
-    --muted:#566171;       /* texto secundario · AA sobre superficie */
-    --line:#e3e9ec;
-    --primary:#0d9488;     /* teal-600 */
+    --surface-2:#dff3f8;
+    --ink:#06264a;         /* azul marino */
+    --muted:#3e627c;       /* texto secundario · AA sobre superficie */
+    --line:#b9e2ec;
+    --primary:#007fa8;     /* cian profundo */
     --primary-ink:#ffffff; /* texto sobre color primario */
-    --primary-soft:#d6f2ec;
-    --primary-soft-ink:#0f6e56;
-    --good:#15803d; --good-bg:#e6f6ec;   /* administrada */
-    --warn:#92500a; --warn-bg:#fbeed3;   /* pendiente */
-    --bad:#b91c1c;  --bad-bg:#fbe6e6;    /* alerta */
-    --focus:#0f766e;
+    --primary-soft:#c9f5f5;
+    --primary-soft-ink:#005e83;
+    --good:#087a69; --good-bg:#d9f8ef;   /* administrada */
+    --warn:#9a5600; --warn-bg:#fff0cf;   /* pendiente */
+    --bad:#b4234b;  --bad-bg:#ffe7ef;    /* alerta */
+    --focus:#008cb7;
     --radius:12px;
-    --shadow:0 6px 20px rgba(15,55,50,.07);
+    --shadow:0 8px 24px rgba(0,78,119,.10);
     /* Tipografía fluida: escala con el viewport dentro de límites */
     --fs-base:clamp(15px, 0.9rem + 0.2vw, 17px);
     --fs-h1:clamp(1.35rem, 1.1rem + 1.4vw, 1.75rem);
@@ -64,26 +64,26 @@
   /* Tokens del tema oscuro (los usan el modo automático y el manual) */
   @media (prefers-color-scheme: dark){
     :root{
-      --bg:#0e1a1c; --surface:#132427; --surface-2:#17292d;
-      --ink:#e7eef0; --muted:#a2b3b6; --line:#26393d;
-      --primary:#2dd4bf; --primary-ink:#04211d;
-      --primary-soft:#123a34; --primary-soft-ink:#8ee9d8;
-      --good:#4ade80; --good-bg:#0f3321;
-      --warn:#fbbf24; --warn-bg:#3a2c10;
-      --bad:#f87171;  --bad-bg:#3a1719;
-      --focus:#5eead4; --shadow:none;
+      --bg:#020d27; --surface:#071a39; --surface-2:#09284f;
+      --ink:#e8fbff; --muted:#9ac8d9; --line:#155375;
+      --primary:#00cfe0; --primary-ink:#001b3b;
+      --primary-soft:#073d62; --primary-soft-ink:#75f4f5;
+      --good:#45e3bd; --good-bg:#073c42;
+      --warn:#ffcb5b; --warn-bg:#3f2a0a;
+      --bad:#ff7da2;  --bad-bg:#45152c;
+      --focus:#00e6ef; --shadow:0 12px 30px rgba(0,0,0,.25);
     }
   }
   /* Modo oscuro forzado desde Ajustes (gana sobre el automático) */
   body.dark{
-    --bg:#0e1a1c; --surface:#132427; --surface-2:#17292d;
-    --ink:#e7eef0; --muted:#a2b3b6; --line:#26393d;
-    --primary:#2dd4bf; --primary-ink:#04211d;
-    --primary-soft:#123a34; --primary-soft-ink:#8ee9d8;
-    --good:#4ade80; --good-bg:#0f3321;
-    --warn:#fbbf24; --warn-bg:#3a2c10;
-    --bad:#f87171;  --bad-bg:#3a1719;
-    --focus:#5eead4; --shadow:none;
+    --bg:#020d27; --surface:#071a39; --surface-2:#09284f;
+    --ink:#e8fbff; --muted:#9ac8d9; --line:#155375;
+    --primary:#00cfe0; --primary-ink:#001b3b;
+    --primary-soft:#073d62; --primary-soft-ink:#75f4f5;
+    --good:#45e3bd; --good-bg:#073c42;
+    --warn:#ffcb5b; --warn-bg:#3f2a0a;
+    --bad:#ff7da2;  --bad-bg:#45152c;
+    --focus:#00e6ef; --shadow:0 12px 30px rgba(0,0,0,.25);
   }
   /* Alto contraste (negro sobre blanco, bordes marcados) */
   body.high{
@@ -138,31 +138,31 @@
   .app{ min-height:100vh; display:grid; grid-template-columns:240px 1fr; }
 
   .side{
-    background:#10312c; color:#fff; padding:22px 14px;
+    background:linear-gradient(160deg,#04173f 0%,#005f88 58%,#00aeba 145%); color:#fff; padding:22px 14px;
     border-right:1px solid rgba(255,255,255,.06);
     position:sticky; top:0; height:100vh; display:flex; flex-direction:column;
   }
-  body.dark .side{ background:#0a201d; }
+  body.dark .side{ background:linear-gradient(160deg,#010b25 0%,#043561 62%,#006d8a 150%); }
   body.high .side{ background:#000; }
   .brand{ display:flex; align-items:center; gap:10px; font-size:1.35rem; font-weight:700; margin:0 8px 26px; }
   .brand i{
     width:38px; height:38px; border-radius:11px;
-    background:#0d9488; box-shadow:0 4px 12px rgba(13,148,136,.4);
+    background:#00cfd2; box-shadow:0 4px 14px rgba(0,207,210,.38);
     color:#fff; display:grid; place-items:center; font-style:normal; font-size:1.1rem;
   }
   .nav a .ic svg{ display:block; }
   .nav{ display:flex; flex-direction:column; gap:4px; }
   .nav a{
     display:flex; align-items:center; gap:12px; min-height:var(--tap);
-    padding:10px 14px; border-radius:10px; color:#c4dcd6;
+    padding:10px 14px; border-radius:10px; color:#c8e8f2;
     text-decoration:none; font-weight:600;
   }
   .nav a .ic{ width:22px; height:22px; display:grid; place-items:center; flex:none; }
   .nav a:hover{ background:rgba(255,255,255,.10); color:#fff; }
-  .nav a[aria-current="page"]{ background:#0d9488; color:#fff; }
+  .nav a[aria-current="page"]{ background:#008cb3; color:#fff; }
   body.high .nav a{ color:#fff; }
   body.high .nav a[aria-current="page"]{ background:#fff; color:#000; }
-  .side-foot{ margin-top:auto; color:#8fb3ab; font-size:.8rem; padding:12px 8px 0; }
+  .side-foot{ margin-top:auto; color:#9bd5e5; font-size:.8rem; padding:12px 8px 0; }
 
   .main{ min-width:0; display:flex; flex-direction:column; }
   .top{
@@ -618,9 +618,9 @@ function prettyDate(iso){
 
 /* Imagen de reserva cuando un medicamento no tiene foto */
 const SIN_FOTO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" fill="#d6f2ec"/>' +
-  '<path d="M58 66h64v58H58z" fill="none" stroke="#8fa6e6" stroke-width="6" rx="8"/>' +
-  '<circle cx="78" cy="88" r="9" fill="#8fa6e6"/><path d="M60 118l26-24 20 18 14-12 22 22" fill="none" stroke="#8fa6e6" stroke-width="6"/></svg>');
+  '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" fill="#c9f5f5"/>' +
+  '<path d="M58 66h64v58H58z" fill="none" stroke="#007fa8" stroke-width="6" rx="8"/>' +
+  '<circle cx="78" cy="88" r="9" fill="#007fa8"/><path d="M60 118l26-24 20 18 14-12 22 22" fill="none" stroke="#007fa8" stroke-width="6"/></svg>');
 
 /* --- Utilidad de seguridad: solo se admiten imágenes incrustadas ---
    Un respaldo manipulado podría traer un src con comillas o una URL
@@ -987,7 +987,7 @@ class Medication{
   constructor(o={}){ Object.assign(this,{
     id:uuid(), name:'', activeIngredient:'', dose:'', unit:'mg',
     presentation:'Comprimido', route:'Oral', times:[], indication:'', notes:'',
-    color:'#0d9488', active:true, stock:0, minStock:5, expiry:'', photo:'', photoPath:'', lab:'', nationalCode:'',
+    color:'#007fa8', active:true, stock:0, minStock:5, expiry:'', photo:'', photoPath:'', lab:'', nationalCode:'',
     /* --- Pauta: no todos los tratamientos son diarios, ni programados --- */
     pattern:'diaria',   // 'diaria' | 'cada' | 'semana' | 'demanda' (sin horario)
     everyDays:2,        // intervalo para la pauta 'cada'
@@ -1295,7 +1295,38 @@ class App{
     this.mode = 'firebase';
     this._fbIds = {};
     this.initLock();
-    db.onAuth(user => user ? this.firebaseLoad() : this.firebaseGate());
+    db.onAuthError(error => {
+      this._firebaseError = this.firebaseErrorText(error);
+      this.firebaseGate(this._firebaseError);
+    });
+    db.onAuth(user => user ? this.firebaseLoad() : this.firebaseGate(this._firebaseError));
+  }
+
+  firebaseErrorText(error){
+    const code = error?.code || 'sin-código';
+    const help = {
+      'auth/unauthorized-domain':'Autoriza hectorandrade88.github.io en Firebase Authentication.',
+      'auth/operation-not-allowed':'Habilita el proveedor Google en Firebase Authentication.',
+      'auth/web-storage-unsupported':'Abre el enlace en Safari, Edge o Chrome, fuera de WhatsApp/Instagram.',
+      'auth/unsupported-webview':'Abre el enlace en Safari, Edge o Chrome, fuera de WhatsApp/Instagram.'
+    }[code];
+    return `No se pudo iniciar sesión (${code}). ${help || error?.message || 'Revisa la configuración de Firebase.'}`;
+  }
+
+  firebaseUnavailable(error){
+    this.mode = 'firebase';
+    this.locked = true;
+    document.body.classList.add('locked');
+    this.lockEl = document.getElementById('lock');
+    this.lockEl.hidden = false;
+    const detail = error?.code || error?.message || String(error);
+    this.lockEl.querySelector('.lock-box').innerHTML = `
+      <div class="lock-logo" aria-hidden="true">!</div>
+      <h1 id="lockTitle">No se pudo iniciar Cuida</h1>
+      <p class="muted">No se cargó la conexión segura con Firebase. La aplicación no abrirá datos locales ni pedirá una clave alternativa.</p>
+      <p class="err" role="alert">Detalle: ${escapeHtml(detail)}</p>
+      <div class="lock-foot"><button class="btn" type="button" id="retryFirebase">Reintentar</button></div>`;
+    document.getElementById('retryFirebase').onclick = () => location.reload();
   }
 
   /* Puerta de acceso: login con Google (solo cuentas autorizadas) */
@@ -1316,8 +1347,13 @@ class App{
       <p class="muted" style="font-size:.8rem;margin-top:16px">
         Los datos están centralizados en la nube y protegidos: solo las cuentas
         autorizadas pueden verlos o modificarlos.</p>`;
-    document.getElementById('gGoogle').onclick = () =>
-      this.db.signIn().catch(e => this.firebaseGate(e?.message || 'No se pudo iniciar sesión.'));
+    document.getElementById('gGoogle').onclick = () => {
+      this._firebaseError = '';
+      this.db.signIn().catch(e => {
+        this._firebaseError = this.firebaseErrorText(e);
+        this.firebaseGate(this._firebaseError);
+      });
+    };
   }
 
   /* Carga el registro central y pinta la app */
@@ -1333,6 +1369,7 @@ class App{
       cuidadores:   new Set(this.state.caregivers.map(c => c.id)),
     };
     this.locked = false;
+    this._firebaseError = '';
     document.body.classList.remove('locked');
     this.lockEl.hidden = true;
     this.touch();
@@ -2083,7 +2120,7 @@ class App{
 
   /* --- Vista de cuidadores (cada uno con varios medicamentos) --- */
   caregiversHTML(){
-    const medChip = m => `<span class="chip"><span class="dot" style="background:${escapeHtml(m.color||'#0d9488')}"></span>${escapeHtml(m.name)}</span>`;
+    const medChip = m => `<span class="chip"><span class="dot" style="background:${escapeHtml(m.color||'#007fa8')}"></span>${escapeHtml(m.name)}</span>`;
     const cards = this.state.caregivers.map(c => {
       const meds = c.medIds.map(id=>this.med(id)).filter(Boolean);
       return `<div class="card car-card hover">
@@ -2816,7 +2853,7 @@ class App{
     const checks = this.state.medications.map(m => `
       <label class="check">
         <input type="checkbox" name="med" value="${m.id}" ${c.medIds.includes(m.id)?'checked':''}>
-        <span class="dot" style="background:${escapeHtml(m.color||'#0d9488')}"></span>${escapeHtml(m.name)}
+        <span class="dot" style="background:${escapeHtml(m.color||'#007fa8')}"></span>${escapeHtml(m.name)}
       </label>`).join('') || '<span class="muted">No hay medicamentos. Crea alguno en Tratamiento.</span>';
     Modal.open(`
       <h2 id="dialogTitle">${edit?'Editar':'Nuevo'} cuidador</h2>
@@ -3316,8 +3353,8 @@ import('./firebase/db.js')
     if(!app._booted){ app._booted = true; app.startFirebase(CuidaDB); }
   })
   .catch(err => {
-    console.warn('Firebase no disponible; se usa el modo anterior:', err?.message || err);
-    app.bootAnyway();
+    console.error('Firebase no disponible:', err);
+    app.firebaseUnavailable(err);
   });
 </script>
 </body>

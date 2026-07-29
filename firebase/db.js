@@ -23,7 +23,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-  signOut, onAuthStateChanged
+  signOut, onAuthStateChanged, getRedirectResult
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, deleteDoc,
@@ -59,6 +59,8 @@ class CuidaDBClass{
     this.appCheck = null;
     this.user = null;
     this._unsubs = [];
+    this._authErrorListeners = [];
+    this._lastAuthError = null;
   }
 
   /* ---- Arranque y sesión --------------------------------- */
@@ -91,10 +93,21 @@ class CuidaDBClass{
     this.db      = getFirestore(this.app);
     this.storage = getStorage(this.app);
     onAuthStateChanged(this.auth, u => { this.user = u; });
+    // Los errores producidos DESPUÉS de volver de Google solo aparecen aquí.
+    // Guardarlos y notificarlos evita que el fallo se pierda en móvil.
+    getRedirectResult(this.auth).catch(error => {
+      this._lastAuthError = error;
+      this._authErrorListeners.forEach(cb => cb(error));
+    });
     return this;
   }
   /* Notifica login/logout. Devuelve función para dejar de escuchar. */
   onAuth(cb){ return onAuthStateChanged(this.auth, u => { this.user = u; cb(u); }); }
+  onAuthError(cb){
+    this._authErrorListeners.push(cb);
+    if(this._lastAuthError) cb(this._lastAuthError);
+    return () => { this._authErrorListeners = this._authErrorListeners.filter(x => x !== cb); };
+  }
   async signIn(){
     const ua = navigator.userAgent || '';
     /* Los navegadores integrados de mensajería no ofrecen el almacenamiento
