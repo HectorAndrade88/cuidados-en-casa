@@ -858,10 +858,15 @@ class ImageTools{
     ctx.drawImage(img, 0, 0, w, h);
     return { dataUrl:c.toDataURL('image/jpeg', this.QUALITY), width:w, height:h };
   }
-  static async jpegFile(dataUrl){
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
-    return new File([blob], 'foto.jpg', {type:'image/jpeg'});
+  static jpegFile(dataUrl){
+    /* No usar fetch(data:…): Safari/iOS puede rechazarlo como “Load failed”,
+       aun cuando la imagen ya esté cargada y validada en memoria. */
+    const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/i.exec(dataUrl || '');
+    if(!match) throw new Error('No se pudo preparar la foto para subirla.');
+    const raw = atob(match[1]);
+    const bytes = new Uint8Array(raw.length);
+    for(let i=0; i<raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    return new File([bytes], 'foto.jpg', {type:'image/jpeg'});
   }
   static bytes(d){ return d ? Math.round((d.length - d.indexOf(',') - 1) * 3 / 4) : 0; }
   static kb(d){ return Math.max(1, Math.round(this.bytes(d) / 1024)); }
@@ -2734,7 +2739,7 @@ class App{
         saveButton.disabled = true;
         saveButton.textContent = 'Subiendo foto…';
         try{
-          const uploaded = await this.db.uploadMedPhoto(m.id, await ImageTools.jpegFile(image));
+          const uploaded = await this.db.uploadMedPhoto(m.id, ImageTools.jpegFile(image));
           image = uploaded.url;
           m.photoPath = uploaded.path;
         }catch(ex){
