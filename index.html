@@ -61,20 +61,8 @@
     --fs-h2:clamp(1.05rem, 0.98rem + 0.4vw, 1.2rem);
     --tap:44px; /* tamaño táctil mínimo (WCAG) */
   }
-  /* Tokens del tema oscuro (los usan el modo automático y el manual) */
-  @media (prefers-color-scheme: dark){
-    :root{
-      --bg:#020d27; --surface:#071a39; --surface-2:#09284f;
-      --ink:#e8fbff; --muted:#9ac8d9; --line:#155375;
-      --primary:#00cfe0; --primary-ink:#001b3b;
-      --primary-soft:#073d62; --primary-soft-ink:#75f4f5;
-      --good:#45e3bd; --good-bg:#073c42;
-      --warn:#ffcb5b; --warn-bg:#3f2a0a;
-      --bad:#ff7da2;  --bad-bg:#45152c;
-      --focus:#00e6ef; --shadow:0 12px 30px rgba(0,0,0,.25);
-    }
-  }
-  /* Modo oscuro forzado desde Ajustes (gana sobre el automático) */
+  /* Modo claro por defecto. El oscuro es OPCIONAL desde Ajustes
+     (antes se activaba solo con el sistema y "se veía todo oscuro"). */
   body.dark{
     --bg:#020d27; --surface:#071a39; --surface-2:#09284f;
     --ink:#e8fbff; --muted:#9ac8d9; --line:#155375;
@@ -216,6 +204,37 @@
   }
   .stat-mini .n{ font-size:1.35rem; font-weight:700; line-height:1.1; }
   .stat-mini .label{ font-size:.76rem; color:var(--muted); }
+
+  /* Ficha del paciente como icono desplegable en el encabezado */
+  .patient-info{ position:relative; flex:none; }
+  .patient-info > summary{
+    list-style:none; cursor:pointer; width:40px; height:40px; border-radius:50%;
+    border:1px solid var(--line); background:var(--surface); color:var(--primary);
+    display:grid; place-items:center; font-size:1.15rem;
+  }
+  .patient-info > summary::-webkit-details-marker{ display:none; }
+  .patient-info[open] > summary{ background:var(--primary-soft); color:var(--primary-soft-ink); border-color:transparent; }
+  .patient-info .pop{
+    position:absolute; right:0; top:48px; z-index:5; width:min(280px,80vw);
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:0 12px 30px rgba(15,55,50,.16); padding:14px 16px;
+  }
+
+  /* Tarjetas plegables (desplegables): agenda, según necesidad… */
+  details.fold{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+  details.fold > summary{
+    list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+    gap:10px; padding:16px 18px; font-weight:600; min-height:var(--tap);
+  }
+  details.fold > summary::-webkit-details-marker{ display:none; }
+  details.fold > summary::after{ content:'⌄'; font-size:1.15rem; color:var(--muted); transition:transform .2s ease; }
+  details.fold[open] > summary::after{ transform:rotate(180deg); }
+  details.fold .fold-body{ padding:0 18px 18px; }
+
+  /* Filas de horario dinámicas (varias dosis al día) */
+  .time-row{ display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .time-row .input{ max-width:170px; }
+  .time-row [data-remtime]{ min-height:38px; padding:6px 12px; }
 
   .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
   .card > b{ display:block; margin-bottom:6px; }
@@ -1858,8 +1877,18 @@ class App{
   }
 
   /* --- Vistas --- */
-  homeHTML(){ return this.dashboardHTML() + this.section('Agenda de hoy', this.agendaHTML(false),
-    '<button class="btn secondary small" type="button" data-action="resetAgenda">Recrear agenda</button>'); }
+  homeHTML(){
+    return this.dashboardHTML() + `
+      <details class="fold" open style="margin-top:22px">
+        <summary>Agenda de hoy</summary>
+        <div class="fold-body">
+          ${this.agendaHTML(false)}
+          <div style="margin-top:12px">
+            <button class="btn secondary small" type="button" data-action="resetAgenda">Recrear agenda</button>
+          </div>
+        </div>
+      </details>`;
+  }
   treatmentHTML(){ return this.medsHTML() + this.section('Inventario', this.inventoryHTML()); }
   recordHTML(){ return this.symptomsHTML() + this.section('Historial reciente', this.historyHTML(),
     '<button class="btn secondary small" type="button" data-action="exportCSV">Exportar CSV</button>'); }
@@ -1879,6 +1908,18 @@ class App{
           <h1 class="dash-h1">${escapeHtml(nombre)}</h1>
           <p class="sub">${escapeHtml(fechaCap)}</p>
         </div>
+        <details class="patient-info">
+          <summary aria-label="Información del paciente" title="Información del paciente">ⓘ</summary>
+          <div class="pop">
+            <b style="display:block;margin-bottom:8px">Información del paciente</b>
+            <ul class="list">
+              <li><span>Nombre</span><b>${escapeHtml(this.state.patient.name || 'Sin registrar')}</b></li>
+              <li><span>Edad</span><b>${this.state.patient.age ? escapeHtml(this.state.patient.age) + ' años' : '—'}</b></li>
+              <li><span>Diagnóstico</span><b>${escapeHtml(this.state.patient.diagnosis || '—')}</b></li>
+            </ul>
+            <button class="btn secondary small" type="button" data-action="goSettings" style="margin-top:10px;width:100%">Editar paciente</button>
+          </div>
+        </details>
       </header>`
       + this.onboardingHTML() + `
       <div class="metrics">
@@ -1887,7 +1928,7 @@ class App{
         <div class="stat-mini"><span class="icon" aria-hidden="true">!</span><div><div class="n">${alerts.length}</div><div class="label">Alertas</div></div></div>
         <div class="stat-mini"><span class="icon" aria-hidden="true">♡</span><div><div class="n">${symToday}</div><div class="label">Síntomas hoy</div></div></div>
       </div>
-      <div class="grid two" style="margin-top:18px">
+      <div class="grid" style="margin-top:18px">
         <div class="card">
           <b>Próxima medicación</b>
           ${m ? `<div class="hero" style="margin-top:14px">
@@ -1914,52 +1955,38 @@ class App{
                      </div>`;
                    })()}
         </div>
-        <div class="card">
-          <b>Progreso del día</b>
-          <div class="n" style="font-size:1.5rem">${done} de ${total}</div>
-          <div class="progress"><i style="width:${total ? done/total*100 : 0}%"></i></div>
-          <p class="muted">${this.pending()} dosis aún por registrar</p>
-        </div>
-        <div class="card">
-          <b>Alertas de inventario</b>
-          ${alerts.length ? alerts.map(x => `<div class="alert ${Inventory.level(x)==='low'?'bad':''}"><b>${escapeHtml(x.name)}</b><br><small>${Inventory.level(x)==='low' ? `Stock bajo: quedan ${x.stock}` : `Vencimiento próximo: ${escapeHtml(x.expiry)}`}</small></div>`).join('')
-                          : '<div class="notice">Todo el inventario está en orden.</div>'}
-        </div>
-        <div class="card">
-          <b>Información del paciente</b>
-          <ul class="list">
-            <li><span>Nombre</span><b>${escapeHtml(this.state.patient.name || 'Sin registrar')}</b></li>
-            <li><span>Edad</span><b>${this.state.patient.age ? escapeHtml(this.state.patient.age) + ' años' : '—'}</b></li>
-            <li><span>Diagnóstico</span><b>${escapeHtml(this.state.patient.diagnosis || '—')}</b></li>
-            <li><span>Fecha</span><b>${fecha}</b></li>
-          </ul>
-          <div class="actions" style="margin-top:10px">
-            <button class="btn secondary small" type="button" data-action="goSettings">Editar paciente</button>
+        <div class="grid two">
+          <div class="card">
+            <b>Progreso del día</b>
+            <div class="n" style="font-size:1.5rem">${done} de ${total}</div>
+            <div class="progress"><i style="width:${total ? done/total*100 : 0}%"></i></div>
+            <p class="muted">${this.pending()} dosis aún por registrar</p>
           </div>
-        </div>
-        <div class="card">
-          <b>Equipo de cuidado</b>
-          ${this.state.caregivers.length
-            ? `<ul class="list">${this.state.caregivers.slice(0,4).map(c=>`<li><span class="car-line"><span class="avatar sm" aria-hidden="true">${escapeHtml(this.initials(c.name))}</span> ${escapeHtml(c.name)}</span><span class="pill">${c.medIds.length} med.</span></li>`).join('')}</ul>`
-            : '<div class="empty">Sin cuidadores. Añádelos en la sección Cuidadores.</div>'}
+          <div class="card">
+            <b>Alertas de inventario</b>
+            ${alerts.length ? alerts.map(x => `<div class="alert ${Inventory.level(x)==='low'?'bad':''}"><b>${escapeHtml(x.name)}</b><br><small>${Inventory.level(x)==='low' ? `Stock bajo: quedan ${x.stock}` : `Vencimiento próximo: ${escapeHtml(x.expiry)}`}</small></div>`).join('')
+                            : '<div class="notice">Todo el inventario está en orden.</div>'}
+          </div>
         </div>
         ${(() => {
           const puntuales = this.state.medications.filter(x => x.active && MedicationSchedule.onDemand(x));
           if(!puntuales.length) return '';
-          return `<div class="card">
-            <b>Según necesidad</b>
-            <p class="muted" style="font-size:.84rem;margin:4px 0 0">No tienen horario: se registran en el momento en que se administran.</p>
-            <ul class="list">
-              ${puntuales.map(x => `<li>
-                <span class="car-line">
-                  <img class="thumb" src="${safeImage(x.photo)}" alt="">
-                  <span><b>${escapeHtml(x.name)}</b><br>
-                    <small class="muted">${escapeHtml(x.dose)} ${escapeHtml(x.unit)} · quedan ${x.stock}${Inventory.level(x)==='low'?' (bajo mínimo)':''}</small></span>
-                </span>
-                <button class="btn small" type="button" data-action="takeNow" data-id="${x.id}">Registrar</button>
-              </li>`).join('')}
-            </ul>
-          </div>`;
+          return `<details class="fold">
+            <summary>Según necesidad · ${puntuales.length}</summary>
+            <div class="fold-body">
+              <p class="muted" style="font-size:.84rem;margin:0 0 8px">No tienen horario: se registran en el momento en que se administran.</p>
+              <ul class="list">
+                ${puntuales.map(x => `<li>
+                  <span class="car-line">
+                    <img class="thumb" src="${safeImage(x.photo)}" alt="">
+                    <span><b>${escapeHtml(x.name)}</b><br>
+                      <small class="muted">${escapeHtml(x.dose)} ${escapeHtml(x.unit)} · quedan ${x.stock}${Inventory.level(x)==='low'?' (bajo mínimo)':''}</small></span>
+                  </span>
+                  <button class="btn small" type="button" data-action="takeNow" data-id="${x.id}">Registrar</button>
+                </li>`).join('')}
+              </ul>
+            </div>
+          </details>`;
         })()}
       </div>`;
   }
@@ -2599,7 +2626,13 @@ class App{
           <span class="hint" id="demandaHint" hidden>Solo se controla el inventario: no se programa
             ninguna dosis ni aparece en la agenda. Las tomas se registran cuando ocurren.</span>
         </label>
-        <label class="full" id="timesWrap">Horarios <span class="req">*</span><input class="input" name="times" value="${escapeHtml(m.times.join(', '))}"><span class="hint">Formato HH:MM separados por coma. Ej: 08:00, 20:00</span><p class="err" data-err="times" role="alert"></p></label>
+        <div class="full" id="timesWrap">
+          <label style="display:block;font-weight:700;font-size:.85rem;color:var(--muted);margin-bottom:6px">Horarios del día <span class="req">*</span></label>
+          <div id="timesList"></div>
+          <button class="btn secondary small" type="button" id="addTime">+ Añadir hora</button>
+          <span class="hint">Una fila por cada dosis del día. Ej: 08:00, 14:00, 20:00.</span>
+          <p class="err" data-err="times" role="alert"></p>
+        </div>
         <label id="everyWrap">Intervalo en días
           <input class="input" name="everyDays" type="number" min="1" max="60" inputmode="numeric" value="${escapeHtml(m.everyDays)}">
           <span class="hint">2 = un día sí y otro no · 3 = cada tres días.</span>
@@ -2660,6 +2693,19 @@ class App{
         };
         sel.onchange = syncPauta; syncPauta();
 
+        // Horarios como filas dinámicas: varias dosis al día con el botón +
+        const timesList = document.getElementById('timesList');
+        const addTimeRow = (val='') => {
+          const row = document.createElement('div');
+          row.className = 'time-row';
+          row.innerHTML = `<input class="input" type="time" name="timeItem" value="${escapeHtml(val)}">
+            <button class="btn secondary small" type="button" data-remtime aria-label="Quitar esta hora">✕</button>`;
+          row.querySelector('[data-remtime]').onclick = () => row.remove();
+          timesList.appendChild(row);
+        };
+        (m.times.length ? m.times : ['08:00']).forEach(addTimeRow);
+        document.getElementById('addTime').onclick = () => addTimeRow('');
+
         const drop  = document.getElementById('drop');
         const box   = document.getElementById('imgState');
         const errEl = document.getElementById('photoErr');
@@ -2705,6 +2751,7 @@ class App{
       e.preventDefault();
       const f = Object.fromEntries(new FormData(form));
       delete f.weekday;               // las casillas se leen aparte
+      delete f.timeItem;              // las horas se leen de sus filas
       let firstBad = null;
       ['name','dose','times','everyDays','weekdays','endDate'].forEach(k => showErr(k,''));
 
@@ -2715,7 +2762,7 @@ class App{
       const pattern  = ['diaria','cada','semana','demanda'].includes(f.pattern) ? f.pattern : 'diaria';
       const demanda  = pattern === 'demanda';
       // Sin horario de aplicación no se exigen horas: solo se controla el inventario
-      const times = demanda ? [] : (f.times || '').split(',').map(x=>x.trim()).filter(Boolean);
+      const times = demanda ? [] : [...form.querySelectorAll('input[name="timeItem"]')].map(x=>x.value.trim()).filter(Boolean);
       if(!demanda && !(times.length && times.every(x => RE_TIME.test(x)))){
         showErr('times','Use horarios válidos, por ejemplo: 08:00, 20:00.'); firstBad ??= 'times';
       }

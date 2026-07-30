@@ -81,12 +81,18 @@ class CuidaDBClass{
     /* App Check debe arrancar ANTES de Firestore/Storage para que sus peticiones
        lleven el token. La clave de sitio de reCAPTCHA Enterprise es pública,
        pero solo funciona para los dominios autorizados en Google Cloud. */
-    if(this.appCheckSiteKey){
-      this.appCheck = initializeAppCheck(this.app, {
-        provider: new ReCaptchaEnterpriseProvider(this.appCheckSiteKey),
-        isTokenAutoRefreshEnabled: true
-      });
-    }else{
+    // La clave de reCAPTCHA está restringida al dominio publicado, así que en
+    // localhost SIEMPRE fallaría. Se activa solo en producción para no ensuciar
+    // el desarrollo local (allí App Check no es necesario).
+    const enLocalhost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    if(this.appCheckSiteKey && !enLocalhost){
+      try{
+        this.appCheck = initializeAppCheck(this.app, {
+          provider: new ReCaptchaEnterpriseProvider(this.appCheckSiteKey),
+          isTokenAutoRefreshEnabled: true
+        });
+      }catch(e){ console.warn('No se pudo iniciar App Check:', e?.message || e); }
+    }else if(!this.appCheckSiteKey){
       console.warn('App Check aún no está configurado: agrega appCheckSiteKey en firebase/firebase-config.js.');
     }
     this.auth    = getAuth(this.app);
