@@ -217,14 +217,23 @@
   .compact-head{ margin-bottom:16px; }
   .dash-h1{ margin:0; font-size:clamp(1.15rem,1rem+0.6vw,1.4rem); }
 
+  /* Panel de hoy: dos columnas. Antes "Próxima medicación" ocupaba el
+     ancho completo (≈970 px) con un contenido de una sola columna, lo que
+     dejaba un gran vacío a la derecha. */
+  .dash-grid{ display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:16px; align-items:start; }
+  .dash-side{ display:grid; gap:16px; min-width:0; }
+  @media (max-width:860px){ .dash-grid{ grid-template-columns:minmax(0,1fr); } }
+
   /* Métricas compactas: fila densa en lugar de tarjetas grandes */
-  .metrics{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .metrics{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
   .stat-mini{
     display:flex; align-items:center; gap:10px;
     background:var(--surface); border:1px solid var(--line);
     border-radius:var(--radius); padding:10px 12px;
   }
-  .stat-mini{ transition:box-shadow .15s ease, transform .15s ease; }
+  /* El contenido se centra: alineado a la izquierda dejaba un hueco
+     de hasta el 55% del ancho a la derecha de cada métrica. */
+  .stat-mini{ justify-content:center; transition:box-shadow .15s ease, transform .15s ease; }
   .stat-mini .icon{
     width:36px; height:36px; border-radius:10px; flex:none;
     background:var(--primary-soft); color:var(--primary-soft-ink);
@@ -613,6 +622,23 @@
     .cal-cell{ height:38px; font-size:.86rem; }
     .cal-grid{ gap:3px; }
     .day{ padding:15px 14px; }
+  }
+
+  /* Paginación (historial): mantiene la tarjeta a una altura estable */
+  .pager{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; padding-top:13px; border-top:1px solid var(--line); }
+  .pager .btn{ gap:4px; }
+  .pager .btn svg{ display:block; }
+  .pager .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+  .pager-info{ color:var(--muted); font-size:.82rem; font-weight:600; font-variant-numeric:tabular-nums; text-align:center; }
+  /* Tarjetas emparejadas (registros / rescates): el paginador se ancla
+     abajo para que ambas queden alineadas aunque una tenga menos filas. */
+  .rec-card{ display:flex; flex-direction:column; }
+  .rec-card > div{ display:flex; flex-direction:column; flex:1; min-width:0; }
+  .rec-card .pager{ margin-top:auto; }
+  @media (max-width:390px){
+    .pager{ gap:6px; }
+    .pager .btn{ padding:7px 9px; }
+    .pager-info{ font-size:.75rem; }
   }
 
   /* Aviso al grupo: destino principal, por eso se destaca sobre el resto */
@@ -1967,7 +1993,7 @@ class App{
         <div class="stat-mini bad"><span class="icon">${svgIcon('alert')}</span><div><div class="n">${alerts.length}</div><div class="label">Alertas</div></div></div>
         <div class="stat-mini"><span class="icon">${svgIcon('heart')}</span><div><div class="n">${symToday}</div><div class="label">Síntomas hoy</div></div></div>
       </div>
-      <div class="grid" style="margin-top:18px">
+      <div class="dash-grid" style="margin-top:18px">
         <div class="card">
           <b>Próxima medicación</b>
           ${m ? `<div class="hero" style="margin-top:14px">
@@ -1992,7 +2018,7 @@ class App{
                      </div>`;
                    })()}
         </div>
-        <div class="grid two">
+        <div class="dash-side">
           <div class="card">
             <b>Progreso del día</b>
             <div class="n" style="font-size:1.5rem">${done} de ${total}</div>
@@ -2005,10 +2031,11 @@ class App{
                             : '<div class="notice">Todo el inventario está en orden.</div>'}
           </div>
         </div>
-        ${(() => {
+      </div>
+      ${(() => {
           const puntuales = this.state.medications.filter(x => x.active && MedicationSchedule.onDemand(x));
           if(!puntuales.length) return '';
-          return `<details class="fold">
+          return `<details class="fold" style="margin-top:16px">
             <summary>Según necesidad · ${puntuales.length}</summary>
             <div class="fold-body">
               <p class="muted" style="font-size:.84rem;margin:0 0 8px">No tienen horario: se registran en el momento en que se administran.</p>
@@ -2023,8 +2050,7 @@ class App{
               </ul>
             </div>
           </details>`;
-        })()}
-      </div>`;
+        })()}`;
   }
 
   /* Primeros pasos: se muestra solo mientras falte lo esencial */
@@ -2153,33 +2179,117 @@ class App{
     </table></div>`;
   }
 
+  /* Ambas listas se paginan con el MISMO tamaño de página: antes una
+     mostraba 10 y la otra 4, así que las tarjetas quedaban descompensadas
+     y el resto de registros era inaccesible. */
   symptomsHTML(){
-    const rows = this.state.symptoms.slice(0,10).map(s =>
-      `<li><div><b>${new Date(s.date).toLocaleString('es-CO')}</b><br><span class="muted">Dolor ${escapeHtml(s.pain)}/10 · T° ${escapeHtml(s.temp)||'—'} °C · ${escapeHtml(s.notes)||'Sin observaciones'}</span></div><span class="pill ${+s.pain>=7?'bad':''}">${+s.pain>=7?'Atención':'Registrado'}</span></li>`
-    ).join('') || '<li class="empty">Aún no se han registrado síntomas.</li>';
-    const rescue = this.state.rescues.slice(0,4).map(x =>
-      `<li><div><b>${escapeHtml(x.medication)}</b> · ${escapeHtml(x.amount)}<br><span class="muted">${escapeHtml(x.reason)} — ${escapeHtml(x.result)||'sin resultado'}</span></div><small>${new Date(x.date).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</small></li>`
-    ).join('') || '<li class="empty">Sin dosis de rescate.</li>';
     const buttons = `<div class="actions">
       <button class="btn secondary" type="button" data-action="rescue">+ Dosis de rescate</button>
       <button class="btn" type="button" data-action="symptom">+ Registrar síntomas</button></div>`;
     return this.title('Registro clínico', 'Síntomas, rescates e historial en un solo lugar.', buttons) + `
       <div class="grid two">
-        <div class="card"><b>Registros recientes</b><ul class="list">${rows}</ul></div>
-        <div class="card"><b>Medicación de rescate</b><ul class="list">${rescue}</ul></div>
+        <div class="card rec-card"><b>Registros recientes</b><div id="symptomsBody">${this.symptomsBodyHTML()}</div></div>
+        <div class="card rec-card"><b>Medicación de rescate</b><div id="rescuesBody">${this.rescuesBodyHTML()}</div></div>
       </div>`;
   }
 
+  symptomsBodyHTML(){
+    const PER = 5;
+    const list = this.state.symptoms;
+    const paginas = Math.max(1, Math.ceil(list.length / PER));
+    this.symPage = Math.min(Math.max(this.symPage || 0, 0), paginas - 1);
+    const desde = this.symPage * PER;
+    const trozo = list.slice(desde, desde + PER);
+    const rows = trozo.map(s =>
+      `<li><div><b>${new Date(s.date).toLocaleString('es-CO')}</b><br><span class="muted">Dolor ${escapeHtml(s.pain)}/10 · T° ${escapeHtml(s.temp)||'—'} °C · ${escapeHtml(s.notes)||'Sin observaciones'}</span></div><span class="pill ${+s.pain>=7?'bad':''}">${+s.pain>=7?'Atención':'Registrado'}</span></li>`
+    ).join('') || '<li class="empty">Aún no se han registrado síntomas.</li>';
+    return `<ul class="list">${rows}</ul>` + this.pagerHTML({ page:this.symPage, paginas, desde,
+      mostrados:trozo.length, total:list.length, per:PER, accion:'sym', que:'de los registros' });
+  }
+
+  rescuesBodyHTML(){
+    const PER = 5;
+    const list = this.state.rescues;
+    const paginas = Math.max(1, Math.ceil(list.length / PER));
+    this.rescPage = Math.min(Math.max(this.rescPage || 0, 0), paginas - 1);
+    const desde = this.rescPage * PER;
+    const trozo = list.slice(desde, desde + PER);
+    const rows = trozo.map(x =>
+      `<li><div><b>${escapeHtml(x.medication)}</b> · ${escapeHtml(x.amount)}<br><span class="muted">${escapeHtml(x.reason)} — ${escapeHtml(x.result)||'sin resultado'}</span></div><small>${new Date(x.date).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</small></li>`
+    ).join('') || '<li class="empty">Sin dosis de rescate.</li>';
+    return `<ul class="list">${rows}</ul>` + this.pagerHTML({ page:this.rescPage, paginas, desde,
+      mostrados:trozo.length, total:list.length, per:PER, accion:'resc', que:'de los rescates' });
+  }
+
+  symGo(n){
+    this.symPage = (this.symPage || 0) + n;
+    const el = document.getElementById('symptomsBody');
+    if(el) el.innerHTML = this.symptomsBodyHTML();
+    this.announce(`Registros recientes, página ${this.symPage + 1}`);
+  }
+  rescGo(n){
+    this.rescPage = (this.rescPage || 0) + n;
+    const el = document.getElementById('rescuesBody');
+    if(el) el.innerHTML = this.rescuesBodyHTML();
+    this.announce(`Medicación de rescate, página ${this.rescPage + 1}`);
+  }
+
+  /* Buscador fuera del bloque que se repinta: así el foco no se pierde
+     al escribir. Solo #historyBody se vuelve a dibujar. */
   historyHTML(){
+    return `<div class="toolbar"><label class="sr-only" for="historySearch">Buscar en historial</label>
+        <input class="input search" id="historySearch" type="search" placeholder="Buscar en historial"
+          value="${escapeHtml(this.histQuery || '')}"></div>
+      <div class="card" id="historyBody">${this.historyBodyHTML()}</div>`;
+  }
+  renderHistory(){
+    const el = document.getElementById('historyBody');
+    if(el) el.innerHTML = this.historyBodyHTML();
+  }
+  /* La búsqueda filtra TODO el historial, no solo la página visible;
+     por eso se filtra y pagina aquí y no ocultando filas ya pintadas. */
+  historyBodyHTML(){
+    const PER = 8;
     // Cada dosis ya queda registrada al administrarla u omitirla: no se
     // vuelve a mezclar la agenda, que duplicaba todas las entradas del día.
-    const merged = [...this.state.history].sort((a,b)=>b.date.localeCompare(a.date));
-    const rows = merged.map(x =>
+    const todo = [...this.state.history].sort((a,b)=>b.date.localeCompare(a.date));
+    const q = (this.histQuery || '').trim().toLowerCase();
+    const list = q
+      ? todo.filter(x => `${x.text} ${x.type}`.toLowerCase().includes(q))
+      : todo;
+
+    const paginas = Math.max(1, Math.ceil(list.length / PER));
+    this.histPage = Math.min(Math.max(this.histPage || 0, 0), paginas - 1);
+    const desde = this.histPage * PER;
+    const trozo = list.slice(desde, desde + PER);
+
+    const rows = trozo.map(x =>
       `<li><div><b>${escapeHtml(x.text)}</b><br><small class="muted">${new Date(x.date).toLocaleString('es-CO')}</small></div><span class="pill">${escapeHtml(x.type)}</span></li>`
-    ).join('') || '<li class="empty">No hay eventos aún.</li>';
-    return `<div class="toolbar"><label class="sr-only" for="historySearch">Buscar en historial</label>
-        <input class="input search" id="historySearch" type="search" placeholder="Buscar en historial"></div>
-      <div class="card"><ul class="list" id="historyRows">${rows}</ul></div>`;
+    ).join('') || `<li class="empty">${q ? 'Ningún evento coincide con la búsqueda.' : 'No hay eventos aún.'}</li>`;
+
+    const pager = this.pagerHTML({ page:this.histPage, paginas, desde,
+      mostrados:trozo.length, total:list.length, per:PER, accion:'hist', que:'del historial' });
+
+    return `<ul class="list" id="historyRows">${rows}</ul>${pager}`;
+  }
+
+  /* Paginador reutilizable (historial, síntomas, rescates). Se oculta
+     por completo cuando todo cabe en una página. */
+  pagerHTML({ page, paginas, desde, mostrados, total, per, accion, que }){
+    if(total <= per) return '';
+    return `<div class="pager">
+        <button class="btn secondary small" type="button" data-action="${accion}Prev"
+          ${page === 0 ? 'disabled' : ''} aria-label="Página anterior ${que}">${svgIcon('left', 16)} Anterior</button>
+        <span class="pager-info">${desde + 1}–${desde + mostrados} de ${total}</span>
+        <button class="btn secondary small" type="button" data-action="${accion}Next"
+          ${page >= paginas - 1 ? 'disabled' : ''} aria-label="Página siguiente ${que}">Siguiente ${svgIcon('right', 16)}</button>
+      </div>`;
+  }
+  histGo(n){
+    this.histPage = (this.histPage || 0) + n;
+    this.renderHistory();
+    this.announce(`Historial, página ${this.histPage + 1}`);
+    document.getElementById('historyBody')?.scrollIntoView({ block:'nearest' });
   }
 
   /* ============================================================
@@ -2555,7 +2665,15 @@ class App{
       };
     };
     filter(document.getElementById('medSearch'), '#medRows > *');
-    filter(document.getElementById('historySearch'), '#historyRows li');
+
+    /* El historial NO usa el filtro genérico: al estar paginado, ocultar
+       filas ya pintadas solo buscaría dentro de la página visible. */
+    const hs = document.getElementById('historySearch');
+    if(hs) hs.oninput = () => {
+      this.histQuery = hs.value;
+      this.histPage  = 0;          // toda búsqueda empieza por el principio
+      this.renderHistory();
+    };
 
     // Formulario del paciente (submit accesible en vez de botón suelto)
     const pf = document.getElementById('patientForm');
@@ -2605,6 +2723,12 @@ class App{
       case 'calPrev': return this.shiftMonth(-1);
       case 'calNext': return this.shiftMonth(1);
       case 'calDay': return this.selectDay(id);
+      case 'histPrev': return this.histGo(-1);
+      case 'histNext': return this.histGo(1);
+      case 'symPrev':  return this.symGo(-1);
+      case 'symNext':  return this.symGo(1);
+      case 'rescPrev': return this.rescGo(-1);
+      case 'rescNext': return this.rescGo(1);
       case 'goSettings': return this.go('settings');
       case 'resetAgenda':
         this.state.agenda = MedicationSchedule.today(this.state.medications);
