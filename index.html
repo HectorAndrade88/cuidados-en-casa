@@ -281,7 +281,7 @@
   .muted{ color:var(--muted); }
 
   .agenda{ display:grid; gap:12px; }
-  .agenda-card{ display:grid; grid-template-columns:66px 58px 1fr auto; align-items:center; gap:14px; }
+  .agenda-card{ display:grid; grid-template-columns:66px 1fr auto; align-items:center; gap:14px; }
   .time{ font-size:1.15rem; font-weight:800; }
   .actions{ display:flex; gap:8px; flex-wrap:wrap; }
   .status{ font-size:.82rem; color:var(--muted); margin-top:4px; }
@@ -305,7 +305,6 @@
   .table th{ text-align:left; color:var(--muted); font-weight:600; background:var(--surface-2); }
   .table th,.table td{ padding:12px; border-bottom:1px solid var(--line); vertical-align:middle; }
   .med-row{ display:flex; align-items:center; gap:10px; }
-  .thumb{ width:40px; height:40px; border-radius:9px; object-fit:cover; background:var(--primary-soft); flex:none; }
   .empty{ text-align:center; padding:28px; color:var(--muted); }
 
   /* Formularios */
@@ -320,9 +319,6 @@
   .err{ color:var(--bad); font-size:.82rem; font-weight:600; margin-top:5px; min-height:0; }
   .input[aria-invalid="true"]{ border-color:var(--bad); outline-color:var(--bad); }
 
-  .drop{ border:2px dashed var(--line); border-radius:12px; padding:16px; text-align:center; color:var(--muted); }
-  .drop.over{ border-color:var(--primary); background:var(--primary-soft); }
-  .photo-preview{ width:76px; height:76px; border-radius:12px; object-fit:cover; margin-top:10px; }
 
   .switch{ display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); padding:14px 0; min-height:var(--tap); }
   .switch:last-child{ border:0; }
@@ -397,12 +393,13 @@
     .nav{ flex-direction:row; width:100%; justify-content:space-around; gap:2px; overflow-x:auto; }
     .nav a{ flex-direction:column; gap:3px; font-size:.68rem; padding:6px 4px; min-width:58px; flex:1 0 auto; justify-content:center; }
     .content{ padding:20px 15px; }
-    .main{ padding-bottom:76px; } /* espacio para la barra inferior */
+    .main{ padding-bottom:calc(76px + env(safe-area-inset-bottom)); } /* espacio para la barra inferior */
+    body.large .main{ padding-bottom:calc(92px + env(safe-area-inset-bottom)); }
     .top{ padding:12px 16px; }
     .stats{ grid-template-columns:repeat(2,1fr); }
     .metrics{ grid-template-columns:repeat(2,1fr); }
     .two{ grid-template-columns:1fr; }
-    .agenda-card{ grid-template-columns:56px 46px 1fr; }
+    .agenda-card{ grid-template-columns:56px 1fr; }
     .agenda-card .actions{ grid-column:1/-1; }
   }
 
@@ -441,7 +438,7 @@
     .metrics{ gap:8px; }
     .stat-mini{ padding:9px; gap:7px; }
     .stat-mini .icon{ width:30px; height:30px; }
-    .agenda-card{ grid-template-columns:50px 40px 1fr; gap:8px; }
+    .agenda-card{ grid-template-columns:50px 1fr; gap:8px; }
     .modal-backdrop{ padding:10px; }
     .dialog{ padding:18px; }
   }
@@ -485,12 +482,8 @@
   .meter i{ display:block; height:100%; width:0; background:var(--bad); transition:width .2s, background .2s; }
   .meter.mid i{ background:var(--warn); } .meter.ok i{ background:var(--good); }
 
-  /* 8. FOTOS: PORTADA, GALERÍA, DETALLE Y VISOR --------------- */
-  .hero{ display:grid; grid-template-columns:minmax(130px,180px) 1fr; gap:20px; align-items:center; }
-  .hero-photo{
-    width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:16px;
-    background:var(--primary-soft); cursor:zoom-in; border:1px solid var(--line);
-  }
+  /* 8. MEDICAMENTOS: tarjetas y ficha sin imágenes --------------- */
+  .hero{ display:grid; gap:20px; align-items:center; }
   .hero-name{ font-size:1.45rem; font-weight:800; line-height:1.2; }
 
   .seg{ display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
@@ -501,29 +494,16 @@
   .seg button[aria-pressed="true"]{ background:var(--primary); color:var(--primary-ink); }
 
   .gallery{ grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); }
-  .gcard{ padding:0; overflow:hidden; display:flex; flex-direction:column; }
-  .gcard img{
-    width:100%; aspect-ratio:4/3; object-fit:cover; display:block;
-    background:var(--primary-soft); cursor:zoom-in;
-  }
+  .gcard{ display:flex; flex-direction:column; }
   .gbody{ padding:15px; display:flex; flex-direction:column; gap:8px; flex:1; }
   .gbody .actions{ margin-top:auto; }
 
-  .detail{ display:grid; grid-template-columns:210px 1fr; gap:22px; align-items:start; }
-  .detail-photo{
-    width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:16px;
-    background:var(--primary-soft); border:1px solid var(--line); cursor:zoom-in;
-  }
+  .detail{ display:grid; grid-template-columns:1fr; gap:22px; align-items:start; }
   .kv{ display:grid; grid-template-columns:auto 1fr; gap:8px 18px; margin:0; }
   .kv dt{ color:var(--muted); font-size:.85rem; }
   .kv dd{ margin:0; font-weight:600; }
 
   .viewer img{ display:block; margin:0 auto; max-width:100%; max-height:72vh; border-radius:14px; }
-
-  /* Zona de carga de foto */
-  .drop .btn{ margin-top:8px; }
-  .photo-preview{ box-shadow:var(--shadow); border:1px solid var(--line); }
-  .photo-meta{ font-size:.78rem; color:var(--muted); margin-top:8px; }
 
   @media (max-width:560px){
     .hero{ grid-template-columns:96px 1fr; gap:14px; }
@@ -635,22 +615,6 @@ function prettyDate(iso){
   return parseISO(iso).toLocaleDateString('es-CO', {weekday:'long', day:'numeric', month:'long'});
 }
 
-/* Imagen de reserva cuando un medicamento no tiene foto */
-const SIN_FOTO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" fill="#c9f5f5"/>' +
-  '<path d="M58 66h64v58H58z" fill="none" stroke="#007fa8" stroke-width="6" rx="8"/>' +
-  '<circle cx="78" cy="88" r="9" fill="#007fa8"/><path d="M60 118l26-24 20 18 14-12 22 22" fill="none" stroke="#007fa8" stroke-width="6"/></svg>');
-
-/* --- Utilidad de seguridad: solo se admiten imágenes incrustadas ---
-   Un respaldo manipulado podría traer un src con comillas o una URL
-   externa. Se exige el formato data:image/... y se escapa siempre;
-   cualquier otra cosa se sustituye por la imagen de reserva. */
-function safeImage(src){
-  return (typeof src === 'string' && (/^data:image\/(png|jpeg|jpg|webp|gif|bmp|svg\+xml)[;,]/i.test(src)
-    || /^https:\/\/firebasestorage\.googleapis\.com\//i.test(src)))
-    ? escapeHtml(src) : SIN_FOTO;
-}
-
 /* ============================================================
    SEGURIDAD · Base criptográfica (Web Crypto del navegador)
    Web Crypto solo existe en contexto seguro: https:// o localhost.
@@ -671,7 +635,7 @@ function uuid(){
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
 }
 
-/* Base64 por bloques: evita desbordar la pila con fotos grandes */
+/* Base64 por bloques: evita desbordar la pila con respaldos grandes */
 const B64 = {
   from(buf){
     const b = new Uint8Array(buf); let s = '';
@@ -836,62 +800,6 @@ class PinLock{
 }
 
 /* ------------------------------------------------------------
-   ImageTools · Fotos de medicamentos
-   Valida el tipo, limita el tamaño y REDIBUJA la imagen en un
-   canvas. El redibujado cumple dos funciones:
-     1. Reduce el peso (clave: no hay base de datos externa).
-     2. Elimina metadatos EXIF/GPS y cualquier carga incrustada
-        en el archivo original.
-   Los SVG se rechazan: pueden contener scripts.
-   ------------------------------------------------------------ */
-class ImageTools{
-  static MAX_INPUT = 8 * 1024 * 1024;  // 8 MB de entrada
-  static MAX_SIDE  = 720;              // lado mayor tras redimensionar
-  static QUALITY   = 0.78;
-  static ALLOWED   = ['image/png','image/jpeg','image/webp','image/gif','image/bmp'];
-
-  static async fromFile(file){
-    if(!file) throw new Error('No se seleccionó ninguna imagen.');
-    if(!this.ALLOWED.includes(file.type))
-      throw new Error('Formato no admitido. Usa JPG, PNG, WEBP, GIF o BMP (los SVG se rechazan por seguridad).');
-    if(file.size > this.MAX_INPUT)
-      throw new Error('La imagen supera los 8 MB. Elige una más ligera.');
-    return this.normalize(await this.decode(file));
-  }
-  static decode(file){
-    return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('El archivo no es una imagen válida.')); };
-      img.src = url;
-    });
-  }
-  static normalize(img){
-    const escala = Math.min(1, this.MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
-    const w = Math.max(1, Math.round(img.naturalWidth  * escala));
-    const h = Math.max(1, Math.round(img.naturalHeight * escala));
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); // fondo para PNG transparente
-    ctx.drawImage(img, 0, 0, w, h);
-    return { dataUrl:c.toDataURL('image/jpeg', this.QUALITY), width:w, height:h };
-  }
-  static jpegFile(dataUrl){
-    /* No usar fetch(data:…): Safari/iOS puede rechazarlo como “Load failed”,
-       aun cuando la imagen ya esté cargada y validada en memoria. */
-    const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/i.exec(dataUrl || '');
-    if(!match) throw new Error('No se pudo preparar la foto para subirla.');
-    const raw = atob(match[1]);
-    const bytes = new Uint8Array(raw.length);
-    for(let i=0; i<raw.length; i++) bytes[i] = raw.charCodeAt(i);
-    return new File([bytes], 'foto.jpg', {type:'image/jpeg'});
-  }
-  static bytes(d){ return d ? Math.round((d.length - d.indexOf(',') - 1) * 3 / 4) : 0; }
-  static kb(d){ return Math.max(1, Math.round(this.bytes(d) / 1024)); }
-}
-
-/* ------------------------------------------------------------
    Phone · Celulares y avisos por WhatsApp
    Se usa el enlace oficial «clic para chatear» (wa.me): no hay
    API, ni token, ni credenciales, ni servidor intermediario.
@@ -925,8 +833,7 @@ class Phone{
    Tres niveles, todos dentro del navegador (sin servidor):
      1. Estado actual.
      2. Copia completa del estado inmediatamente anterior.
-     3. Hasta 5 copias diarias ligeras (sin fotos, ~10 % del peso)
-        para poder recuperar el historial si se agota la cuota.
+   3. Hasta 5 copias diarias para poder recuperar el historial si se agota la cuota.
    ------------------------------------------------------------ */
 class StorageManager{
   constructor(){
@@ -981,8 +888,7 @@ class StorageManager{
     const i = list.findIndex(s => s.day === hoy);
     if(i === 0 && Date.now() - new Date(list[0].at).getTime() < 3600000) return;
     if(i >= 0) list.splice(i, 1);
-    const ligero = { ...data, medications:(data.medications || []).map(m => ({...m, photo:''})) };
-    list.unshift({ day:hoy, at:new Date().toISOString(), data:JSON.stringify(ligero) });
+    list.unshift({ day:hoy, at:new Date().toISOString(), data:JSON.stringify(data) });
     localStorage.setItem(this.snapKey, JSON.stringify(list.slice(0, this.maxSnaps)));
   }
   /* Espacio ocupado por la app en este navegador (aprox.) */
@@ -1002,16 +908,12 @@ class StorageManager{
 class Patient{
   constructor(o={}){ Object.assign(this,{name:'', age:'', diagnosis:''}, o); }
   get registrado(){ return !!String(this.name || '').trim(); }
-  get resumen(){
-    return [this.name, this.age ? `${this.age} años` : '', this.diagnosis]
-      .filter(x => String(x || '').trim()).join(' · ');
-  }
 }
 class Medication{
   constructor(o={}){ Object.assign(this,{
     id:uuid(), name:'', activeIngredient:'', dose:'', unit:'mg',
     presentation:'Comprimido', route:'Oral', times:[], indication:'', notes:'',
-    color:'#007fa8', active:true, stock:0, minStock:5, expiry:'', photo:'', photoPath:'', lab:'', nationalCode:'',
+    color:'#007fa8', active:true, stock:0, minStock:5, expiry:'', lab:'', nationalCode:'',
     /* --- Pauta: no todos los tratamientos son diarios, ni programados --- */
     pattern:'diaria',   // 'diaria' | 'cada' | 'semana' | 'demanda' (sin horario)
     everyDays:2,        // intervalo para la pauta 'cada'
@@ -1174,7 +1076,8 @@ const Modal = {
     document.addEventListener('keydown', this.onKey, true);
     if(onOpen) onOpen(this.dialog);
     // Foco inicial: primer campo o botón útil
-    const first = this.dialog.querySelector('input,select,textarea,button:not([data-close])') || this.dialog.querySelector('button');
+    const first = this.dialog.querySelector('input,select,textarea')
+      || this.dialog.querySelector('[data-close]') || this.dialog.querySelector('button');
     (first || this.dialog).focus();
   },
   trap(e){
@@ -1433,7 +1336,12 @@ class App{
   migrate(){
     this.state.patient    = new Patient(this.state.patient);
     this.state.caregivers = (this.state.caregivers || []).map(c => new Caregiver(c));
-    this.state.medications = (this.state.medications || []).map(m => new Medication(m));
+    this.state.medications = (this.state.medications || []).map(m => {
+      const medication = new Medication(m);
+      delete medication.photo;
+      delete medication.photoPath;
+      return medication;
+    });
     this.state.symptoms = this.state.symptoms || [];
     this.state.rescues  = this.state.rescues  || [];
     this.state.history  = this.state.history  || [];
@@ -1445,7 +1353,7 @@ class App{
     if(alHeredado != null && settingsPrevias.autolock == null) settingsPrevias.autolock = +alHeredado;
     this.state.settings = Object.assign(
       { dark:false, large:false, high:false, sound:false, notifications:false,
-        autolock:5, medView:'tabla', lastBackup:'', whatsapp:true },
+        autolock:5, medView:'tabla', lastBackup:'', whatsapp:true, whatsappGroup:'' },
       settingsPrevias);
 
     // El PIN deja de vivir por dispositivo y pasa al perfil central (state.pin).
@@ -1706,14 +1614,12 @@ class App{
   /* Datos de ejemplo, solo si se piden expresamente desde Ajustes.
      Sirven para ver cómo queda la aplicación llena antes de usarla. */
   demoData(){
-    const svg = (bg,label) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="100%" height="100%" rx="18" fill="${bg}"/><rect x="42" y="28" width="96" height="124" rx="12" fill="white"/><path d="M62 60h56M62 78h40" stroke="${bg}" stroke-width="7" stroke-linecap="round"/><text x="90" y="120" text-anchor="middle" font-family="Arial" font-size="15" fill="${bg}">${label}</text></svg>`);
     const meds = [
-      new Medication({name:'Morfina', activeIngredient:'Sulfato de morfina', dose:'10', unit:'mg', presentation:'Solución oral', route:'Oral', times:['08:00','14:00','20:00'], indication:'Dolor intenso', notes:'Administrar con jeringa dosificadora.', color:'#805ad5', stock:28, minStock:10, expiry:'2027-05-30', lab:'Ejemplo Farma', photo:svg('#805ad5','MORFINA')}),
-      new Medication({name:'Paracetamol', activeIngredient:'Paracetamol', dose:'1', unit:'g', presentation:'Comprimido', route:'Oral', times:['09:00','21:00'], indication:'Dolor o fiebre', color:'#92500a', stock:8, minStock:10, expiry:'2026-10-12', lab:'Ejemplo Farma', photo:svg('#c2740f','PARACETAMOL')}),
-      new Medication({name:'Ondansetrón', activeIngredient:'Ondansetrón', dose:'4', unit:'mg', presentation:'Comprimido', route:'Oral', times:['08:00','20:00'], indication:'Náuseas y vómitos', color:'#0f6f52', stock:16, minStock:6, expiry:'2027-01-08', lab:'Ejemplo Farma', photo:svg('#0f6f52','ONDANSETRÓN')}),
+      new Medication({name:'Morfina', activeIngredient:'Sulfato de morfina', dose:'10', unit:'mg', presentation:'Solución oral', route:'Oral', times:['08:00','14:00','20:00'], indication:'Dolor intenso', notes:'Administrar con jeringa dosificadora.', color:'#805ad5', stock:28, minStock:10, expiry:'2027-05-30', lab:'Ejemplo Farma'}),
+      new Medication({name:'Paracetamol', activeIngredient:'Paracetamol', dose:'1', unit:'g', presentation:'Comprimido', route:'Oral', times:['09:00','21:00'], indication:'Dolor o fiebre', color:'#92500a', stock:8, minStock:10, expiry:'2026-10-12', lab:'Ejemplo Farma'}),
+      new Medication({name:'Ondansetrón', activeIngredient:'Ondansetrón', dose:'4', unit:'mg', presentation:'Comprimido', route:'Oral', times:['08:00','20:00'], indication:'Náuseas y vómitos', color:'#0f6f52', stock:16, minStock:6, expiry:'2027-01-08', lab:'Ejemplo Farma'}),
       // Ejemplo de medicamento sin horario: solo se controla el inventario
-      new Medication({name:'Hioscina', activeIngredient:'Butilbromuro de hioscina', dose:'10', unit:'mg', presentation:'Ampolla', route:'Subcutánea', pattern:'demanda', indication:'Secreciones o cólicos, según necesidad', notes:'Registrar cada aplicación en el momento.', color:'#7a3d00', stock:12, minStock:4, expiry:'2027-03-15', lab:'Ejemplo Farma', photo:svg('#7a3d00','HIOSCINA')})
+      new Medication({name:'Hioscina', activeIngredient:'Butilbromuro de hioscina', dose:'10', unit:'mg', presentation:'Ampolla', route:'Subcutánea', pattern:'demanda', indication:'Secreciones o cólicos, según necesidad', notes:'Registrar cada aplicación en el momento.', color:'#7a3d00', stock:12, minStock:4, expiry:'2027-03-15', lab:'Ejemplo Farma'})
     ];
     // Cuidadores de ejemplo, cada uno con VARIOS medicamentos asignados
     const caregivers = [
@@ -1728,8 +1634,7 @@ class App{
     };
   }
 
-  /* Guarda avisando si el navegador se queda sin espacio (las fotos
-     son lo que más pesa cuando no hay base de datos externa). */
+  /* Guarda avisando si el navegador se queda sin espacio. */
   save(){
     if(!this.state) return {ok:false};
     this.state.updatedAt = new Date().toISOString();
@@ -1739,7 +1644,7 @@ class App{
 
     const r = this.store.save(this.state);
     if(!r.ok)
-      toast('No se pudo guardar: el almacenamiento del navegador está lleno. Descarga un respaldo y elimina fotos que no uses.', 'bad', 10000);
+      toast('No se pudo guardar: el almacenamiento del navegador está lleno. Descarga un respaldo y elimina datos que no uses.', 'bad', 10000);
     else if(r.warning === 'copias-liberadas')
       toast('Queda poco espacio: se liberaron las copias locales para poder guardar.', 'bad', 8000);
     return r;
@@ -1836,7 +1741,7 @@ class App{
     const p = this.state.patient;
     el.innerHTML = p.registrado
       ? `<button class="linklike" type="button" data-action="goSettings"
-                 title="Editar los datos del paciente">${escapeHtml(p.resumen)}</button>`
+                 title="Editar los datos del paciente">${escapeHtml(p.name)}</button>`
       : `<button class="linklike warnlike" type="button" data-action="goSettings">
            Sin paciente registrado · pulsa para configurarlo</button>`;
     el.onclick = e => { if(e.target.closest('[data-action="goSettings"]')) this.go('settings'); };
@@ -1932,8 +1837,6 @@ class App{
         <div class="card">
           <b>Próxima medicación</b>
           ${m ? `<div class="hero" style="margin-top:14px">
-                   <img class="hero-photo" src="${safeImage(m.photo)}" alt="Foto de ${escapeHtml(m.name)}"
-                        data-action="viewPhoto" data-id="${m.id}" tabindex="0" role="button">
                    <div>
                      <div class="hero-name">${escapeHtml(m.name)}</div>
                      <p class="muted" style="margin:4px 0 8px">${escapeHtml(m.dose)} ${escapeHtml(m.unit)} · ${escapeHtml(m.presentation)} · ${escapeHtml(m.route)}</p>
@@ -1978,7 +1881,6 @@ class App{
               <ul class="list">
                 ${puntuales.map(x => `<li>
                   <span class="car-line">
-                    <img class="thumb" src="${safeImage(x.photo)}" alt="">
                     <span><b>${escapeHtml(x.name)}</b><br>
                       <small class="muted">${escapeHtml(x.dose)} ${escapeHtml(x.unit)} · quedan ${x.stock}${Inventory.level(x)==='low'?' (bajo mínimo)':''}</small></span>
                   </span>
@@ -2022,7 +1924,6 @@ class App{
       const st = {pending:'Pendiente', administered:'Administrado', skipped:'Omitido', postponed:'Pospuesto'}[a.status];
       return `<div class="card agenda-card">
         <div class="time">${escapeHtml(a.time)}</div>
-        <img class="med-icon" src="${safeImage(m.photo)}" alt="">
         <div>
           <b>${escapeHtml(m.name)}</b>
           <div class="muted">${escapeHtml(m.dose)} ${escapeHtml(m.unit)} · ${escapeHtml(m.route)}</div>
@@ -2043,7 +1944,7 @@ class App{
 
   medsHTML(){
     const rows = this.state.medications.map(m => `<tr>
-      <td data-label="Medicamento"><div class="med-row"><img class="thumb" src="${safeImage(m.photo)}" alt=""><div><b>${escapeHtml(m.name)}</b><br><small class="muted">${escapeHtml(m.activeIngredient||'Sin principio activo')}</small>${this.caregiversFor(m.id).length?`<div class="chips mini">${this.caregiversFor(m.id).map(c=>`<span class="chip">${escapeHtml(c.name)}</span>`).join('')}</div>`:''}</div></div></td>
+      <td data-label="Medicamento"><div class="med-row"><div><b>${escapeHtml(m.name)}</b><br><small class="muted">${escapeHtml(m.activeIngredient||'Sin principio activo')}</small>${this.caregiversFor(m.id).length?`<div class="chips mini">${this.caregiversFor(m.id).map(c=>`<span class="chip">${escapeHtml(c.name)}</span>`).join('')}</div>`:''}</div></div></td>
       <td data-label="Dosis">${escapeHtml(m.dose)} ${escapeHtml(m.unit)}</td>
       <td data-label="Pauta">${m.times.map(escapeHtml).join(', ')||'—'}<br>
         <small class="muted">${escapeHtml(MedicationSchedule.describe(m))}</small></td>
@@ -2057,10 +1958,7 @@ class App{
 
     const galeria = this.state.medications.map(m => {
       const cuidadores = this.caregiversFor(m.id);
-      return `<div class="card gcard hover">
-        <img src="${safeImage(m.photo)}" alt="Foto de ${escapeHtml(m.name)}"
-             data-action="viewPhoto" data-id="${m.id}" tabindex="0" role="button">
-        <div class="gbody">
+      return `<div class="card gcard hover"><div class="gbody">
           <div>
             <b>${escapeHtml(m.name)}</b>
             <div class="muted">${escapeHtml(m.dose)} ${escapeHtml(m.unit)} · ${escapeHtml(m.presentation)}</div>
@@ -2105,7 +2003,7 @@ class App{
 
   inventoryHTML(){
     const rows = this.state.medications.map(m => `<tr>
-      <td data-label="Medicamento"><div class="med-row"><img class="thumb" src="${safeImage(m.photo)}" alt=""><b>${escapeHtml(m.name)}</b></div></td>
+      <td data-label="Medicamento"><div class="med-row"><b>${escapeHtml(m.name)}</b></div></td>
       <td data-label="Restante"><b>${m.stock}</b> unidades</td>
       <td data-label="Consumo">${MedicationSchedule.onDemand(m) ? '—' : (Math.round(MedicationSchedule.dosesPerDay(m)*100)/100) + '/día'}<br>
         <small class="muted">${escapeHtml(MedicationSchedule.describe(m))}</small></td>
@@ -2204,6 +2102,11 @@ class App{
         <div class="card">
           <b>Accesibilidad y avisos</b>
           ${toggles.map(([k,label]) => `<label class="switch"><span>${label}</span><input type="checkbox" data-setting="${k}" ${s[k]?'checked':''}></label>`).join('')}
+          <label style="display:block;margin-top:14px">Enlace del grupo de WhatsApp
+            <input class="input" id="whatsappGroup" type="url" inputmode="url" autocomplete="url"
+              placeholder="https://chat.whatsapp.com/..." value="${escapeHtml(s.whatsappGroup || '')}">
+            <span class="hint">Opcional. Pega el enlace de invitación del grupo que recibirá los avisos.</span>
+          </label>
           <p class="muted" style="font-size:.82rem;margin-top:12px">
             El aviso de WhatsApp usa un enlace normal con el mensaje escrito: no hay API, ni credenciales,
             ni envío automático. Se abre la aplicación y tú confirmas el envío. Solo aparece para los
@@ -2325,7 +2228,6 @@ class App{
   backupHTML(){
     const usado = this.store.usedBytes();
     const pct = Math.min(100, Math.round(usado / (5 * 1024 * 1024) * 100));
-    const fotos = this.state.medications.reduce((n,m) => n + ImageTools.bytes(m.photo), 0);
     const copias = this.store.snapshots();
     const last = this.state.settings.lastBackup;
     return `
@@ -2336,7 +2238,6 @@ class App{
 
         <ul class="list" style="margin-top:8px">
           <li><span>Espacio ocupado</span><b>${this.formatBytes(usado)} <small class="muted">(~${pct} % del límite)</small></b></li>
-          <li><span>De ello, fotos</span><b>${this.formatBytes(fotos)}</b></li>
           <li><span>Último respaldo descargado</span><b>${last ? new Date(last).toLocaleString('es-CO') : 'Nunca'}</b></li>
         </ul>
         <div class="meter ${pct<60?'ok':pct<85?'mid':''}" aria-hidden="true"><i style="width:${pct}%"></i></div>
@@ -2350,13 +2251,12 @@ class App{
 
         <div style="margin-top:20px" ${this.mode === 'perfil' ? 'hidden' : ''}>
           <b>Copias automáticas en este navegador</b>
-          <p class="muted" style="font-size:.84rem">Copia del estado anterior y hasta 5 copias diarias.
-            Las diarias se guardan sin fotos para ocupar poco espacio.</p>
+          <p class="muted" style="font-size:.84rem">Copia del estado anterior y hasta 5 copias diarias.</p>
           <ul class="list">
-            ${this.store.previous() ? `<li><span>Estado anterior <small class="muted">(completo, con fotos)</small></span>
+            ${this.store.previous() ? `<li><span>Estado anterior</span>
               <button class="btn secondary small" type="button" data-action="restorePrev">Restaurar</button></li>` : ''}
             ${copias.length ? copias.map((c,i) => `<li>
-                <span>${new Date(c.at).toLocaleString('es-CO')} <small class="muted">(${this.formatBytes(c.data.length*2)}, sin fotos)</small></span>
+                <span>${new Date(c.at).toLocaleString('es-CO')} <small class="muted">(${this.formatBytes(c.data.length*2)})</small></span>
                 <button class="btn secondary small" type="button" data-action="restoreSnap" data-id="${i}">Restaurar</button></li>`).join('')
               : '<li class="empty">Aún no hay copias diarias.</li>'}
           </ul>
@@ -2390,13 +2290,6 @@ class App{
     const pf = document.getElementById('patientForm');
     if(pf) pf.onsubmit = e => { e.preventDefault(); this.savePatient(); };
 
-    // Activar con Enter/Espacio las fotos que abren el visor
-    document.querySelectorAll('[data-action="viewPhoto"]').forEach(img => {
-      img.onkeydown = e => {
-        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); this.photoViewer(img.dataset.id); }
-      };
-    });
-
     // Interruptores de ajustes
     document.querySelectorAll('[data-setting]').forEach(x => x.onchange = () => {
       this.state.settings[x.dataset.setting] = x.checked;
@@ -2404,6 +2297,12 @@ class App{
         Notification.requestPermission();
       this.save(); this.applySettings();
     });
+
+    const groupInput = document.getElementById('whatsappGroup');
+    if(groupInput) groupInput.onchange = () => {
+      this.state.settings.whatsappGroup = groupInput.value.trim();
+      this.save();
+    };
   }
 
   /* --- Enrutado de acciones (delegación) --- */
@@ -2422,7 +2321,6 @@ class App{
       case 'delCaregiver': return this.deleteCaregiver(id);
       case 'takeNow': return this.takeDose(id);
       case 'viewMed': return this.medDetail(id);
-      case 'viewPhoto': return this.photoViewer(id);
       case 'viewMode':
         this.state.settings.medView = id;
         this.save(); return this.render();
@@ -2501,6 +2399,14 @@ class App{
     return { asignados, otros };
   }
 
+  whatsappGroupLink(){
+    try{
+      const url = new URL(this.state.settings.whatsappGroup || '');
+      return url.protocol === 'https:' && url.hostname.toLowerCase() === 'chat.whatsapp.com'
+        ? url.href : '';
+    }catch{ return ''; }
+  }
+
   whatsappNotice(a, m, quien){
     if(this.state.settings.whatsapp === false) return;
     const { asignados, otros } = this.waRecipients(m, quien);
@@ -2508,6 +2414,7 @@ class App{
     if(!lista.length) return;
 
     const texto = this.waMessage(m, a, quien);
+    const groupLink = this.whatsappGroupLink();
     const fila = (c, esResponsable) => `
       <li>
         <span class="car-line">
@@ -2521,7 +2428,7 @@ class App{
         <a class="btn wa small" target="_blank" rel="noopener noreferrer"
            data-wa="${escapeHtml(c.phone)}" data-name="${escapeHtml(c.name)}"
            href="${escapeHtml(Phone.waLink(c.phone, texto))}"
-           aria-label="Avisar a ${escapeHtml(c.name)} por WhatsApp">Enviar</a>
+           aria-label="Avisar a ${escapeHtml(c.name)} por WhatsApp">👤 Enviar</a>
       </li>`;
 
     Modal.open(`
@@ -2534,7 +2441,19 @@ class App{
       <p class="hint">Se abre WhatsApp con el mensaje ya escrito; el envío lo confirmas tú desde la
         aplicación. Cuida no manda nada por su cuenta ni usa ningún servicio externo.</p>
 
-      <div style="margin-top:18px"><b>Avisar a</b>
+      <div class="card" style="margin-top:18px;padding:14px">
+        <b>Enviar al grupo</b>
+        ${groupLink
+          ? `<p class="hint">Copia el mensaje y abre el grupo. El modal permanecerá abierto mientras terminas los avisos.</p>
+             <div class="actions">
+               <button class="btn secondary small" type="button" id="copyWaMessage">Copiar mensaje</button>
+               <a class="btn wa small" target="_blank" rel="noopener noreferrer" id="sendWaGroup"
+                  href="${escapeHtml(groupLink)}" aria-label="Abrir el grupo de WhatsApp">👥 Abrir grupo</a>
+             </div>`
+          : `<p class="hint">Configura el enlace del grupo en Ajustes para enviar este aviso al grupo.</p>`}
+      </div>
+
+      <div style="margin-top:18px"><b>Enviar a un cuidador</b>
         <ul class="list" id="waList">
           ${asignados.map(c => fila(c, true)).join('')}
           ${otros.map(c => fila(c, false)).join('')}
@@ -2544,19 +2463,39 @@ class App{
         <button class="btn secondary" type="button" data-close>Ahora no</button>
       </div>`);
 
-    // El mensaje es editable: los enlaces se rehacen al escribir
+    // El mensaje es editable: los enlaces personales se rehacen al escribir.
     const caja = document.getElementById('waText');
     const sincronizar = () => Modal.dialog.querySelectorAll('[data-wa]').forEach(el => {
       el.href = Phone.waLink(el.dataset.wa, caja.value);
     });
     caja.oninput = sincronizar;
 
-    // Se deja constancia en el historial de a quién se avisó
-    Modal.dialog.querySelectorAll('[data-wa]').forEach(el => el.addEventListener('click', () => {
-      new HistoryManager().add(this.state, 'aviso', `${m.name}: aviso de administración enviado a ${el.dataset.name}`);
+    const registrarAviso = destino => {
+      new HistoryManager().add(this.state, 'aviso', `${m.name}: aviso de administración enviado a ${destino}`);
       this.save();
+    };
+
+    const copyButton = document.getElementById('copyWaMessage');
+    if(copyButton) copyButton.onclick = async () => {
+      try{
+        await navigator.clipboard.writeText(caja.value);
+        toast('Mensaje copiado. Pégalo en el grupo de WhatsApp.', 'good');
+      }catch{
+        caja.focus(); caja.select();
+        toast('Selecciona el mensaje y cópialo para enviarlo al grupo.', 'good');
+      }
+    };
+
+    const groupButton = document.getElementById('sendWaGroup');
+    if(groupButton) groupButton.onclick = () => {
+      registrarAviso('el grupo de WhatsApp');
+      toast('Grupo de WhatsApp abierto. Pega el mensaje y envíalo.', 'good');
+    };
+
+    // El modal sigue abierto para poder informar a varias personas.
+    Modal.dialog.querySelectorAll('[data-wa]').forEach(el => el.addEventListener('click', () => {
+      registrarAviso(el.dataset.name);
       toast(`WhatsApp abierto para avisar a ${el.dataset.name}.`, 'good');
-      setTimeout(() => { Modal.close(); this.render(); }, 300);
     }));
   }
 
@@ -2606,7 +2545,6 @@ class App{
   /* --- Diálogo de medicamento (crear/editar) --- */
   medDialog(m = new Medication()){
     const edit = this.state.medications.some(x=>x.id===m.id);
-    let image = m.photo;
     Modal.open(`
       <h2 id="dialogTitle">${edit?'Editar':'Nuevo'} medicamento</h2>
       <form id="medForm" class="form" novalidate>
@@ -2660,20 +2598,6 @@ class App{
         <label>Código nacional<input class="input" name="nationalCode" value="${escapeHtml(m.nationalCode)}"></label>
         <label class="full">Indicación<input class="input" name="indication" value="${escapeHtml(m.indication)}"></label>
         <label class="full">Observaciones<textarea class="input" name="notes">${escapeHtml(m.notes)}</textarea></label>
-        <div class="full drop" id="drop">
-          <p><b>Foto del medicamento</b><br>
-            <span class="muted">Toma una foto con la cámara o elige una imagen. Se usa en la portada y en la ficha.</span></p>
-          <div class="actions" style="justify-content:center">
-            <label class="btn secondary small" for="photoCamera">Tomar foto</label>
-            <label class="btn secondary small" for="photoFile">Elegir imagen</label>
-          </div>
-          <input hidden type="file" id="photoCamera" accept="image/*" capture="environment" aria-label="Tomar foto del medicamento">
-          <input hidden type="file" id="photoFile" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="Elegir foto del medicamento">
-          <p class="hint">JPG, PNG, WEBP, GIF o BMP · máximo 8 MB. Se reduce a 720 px y se eliminan
-            los metadatos (EXIF y ubicación) antes de subirla de forma privada a Firebase Storage.</p>
-          <p class="err" id="photoErr" role="alert"></p>
-          <div id="imgState"></div>
-        </div>
       </form>
       <div class="modal-foot">
         <button class="btn secondary" type="button" data-close>Cancelar</button>
@@ -2706,38 +2630,6 @@ class App{
         (m.times.length ? m.times : ['08:00']).forEach(addTimeRow);
         document.getElementById('addTime').onclick = () => addTimeRow('');
 
-        const drop  = document.getElementById('drop');
-        const box   = document.getElementById('imgState');
-        const errEl = document.getElementById('photoErr');
-
-        /* Muestra la vista previa con su peso real ya comprimido */
-        const preview = () => {
-          if(!image){ box.innerHTML = ''; return; }
-          box.innerHTML = `
-            <img class="photo-preview" src="${safeImage(image)}" alt="Vista previa de la foto">
-            <p class="photo-meta">Guardada como JPEG · ${ImageTools.kb(image)} KB</p>
-            <button class="btn secondary small" type="button" id="photoDel">Quitar foto</button>`;
-          document.getElementById('photoDel').onclick = () => { image = ''; errEl.textContent = ''; preview(); };
-        };
-        preview();
-
-        /* Procesa el archivo: valida, redimensiona y limpia metadatos */
-        const load = async f => {
-          errEl.textContent = '';
-          try{
-            const r = await ImageTools.fromFile(f);
-            image = r.dataUrl;
-            preview();
-            toast(`Foto lista: ${r.width}×${r.height} px, ${ImageTools.kb(image)} KB.`, 'good');
-          }catch(ex){
-            errEl.textContent = ex.message;
-          }
-        };
-        document.getElementById('photoCamera').onchange = e => load(e.target.files[0]);
-        document.getElementById('photoFile').onchange = e => load(e.target.files[0]);
-        drop.ondragover  = e => { e.preventDefault(); drop.classList.add('over'); };
-        drop.ondragleave = () => drop.classList.remove('over');
-        drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); load(e.dataTransfer.files[0]); };
       }});
 
     // Guardado con validación accesible inline
@@ -2781,22 +2673,6 @@ class App{
 
       Object.assign(m, f);
       m.times = times; m.stock = +f.stock || 0; m.minStock = +f.minStock || 0;
-      if(this.mode === 'firebase' && image && image !== m.photo){
-        const saveButton = document.getElementById('saveMed');
-        saveButton.disabled = true;
-        saveButton.textContent = 'Subiendo foto…';
-        try{
-          const uploaded = await this.db.uploadMedPhoto(m.id, ImageTools.jpegFile(image));
-          image = uploaded.url;
-          m.photoPath = uploaded.path;
-        }catch(ex){
-          document.getElementById('photoErr').textContent = 'No se pudo subir la foto: ' + (ex?.message || ex);
-          saveButton.disabled = false;
-          saveButton.textContent = 'Guardar medicamento';
-          return;
-        }
-      }
-      m.photo = image;
       m.pattern   = pattern;
       m.everyDays = cada;
       m.weekdays  = weekdays;
@@ -3038,10 +2914,7 @@ class App{
     const fila = (k, v) => v ? `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>` : '';
     Modal.open(`
       <h2 id="dialogTitle">${escapeHtml(m.name)}</h2>
-      <div class="detail">
-        <img class="detail-photo" id="detailPhoto" src="${safeImage(m.photo)}"
-             alt="Foto de ${escapeHtml(m.name)}" title="Ampliar la foto">
-        <div>
+      <div class="detail"><div>
           <dl class="kv">
             ${fila('Principio activo', m.activeIngredient)}
             ${fila('Dosis', `${m.dose} ${m.unit}`)}
@@ -3077,21 +2950,9 @@ class App{
         ${MedicationSchedule.onDemand(m) ? '<button class="btn" type="button" id="detailTake">Registrar toma</button>' : ''}
         <button class="btn ${MedicationSchedule.onDemand(m)?'secondary':''}" type="button" id="detailEdit">Editar medicamento</button>
       </div>`);
-    document.getElementById('detailPhoto').onclick = () => this.photoViewer(m.id);
     document.getElementById('detailEdit').onclick  = () => { Modal.close(); this.medDialog(m); };
     const btnTake = document.getElementById('detailTake');
     if(btnTake) btnTake.onclick = () => { Modal.close(); this.takeDose(m.id); };
-  }
-
-  photoViewer(id){
-    const m = this.med(id); if(!m) return;
-    Modal.open(`
-      <h2 id="dialogTitle">${escapeHtml(m.name)}</h2>
-      <div class="viewer"><img src="${safeImage(m.photo)}" alt="Foto ampliada de ${escapeHtml(m.name)}"></div>
-      <p class="muted" style="text-align:center;margin-top:12px">
-        ${m.photo ? ImageTools.kb(m.photo) + ' KB · guardada solo en este dispositivo'
-                  : 'Este medicamento aún no tiene foto. Añádela desde Editar.'}</p>
-      <div class="modal-foot"><button class="btn secondary" type="button" data-close>Cerrar</button></div>`);
   }
 
   /* ============================================================
