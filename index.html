@@ -53,12 +53,24 @@
     --warn:#9a5600; --warn-bg:#fff0cf;   /* pendiente */
     --bad:#b4234b;  --bad-bg:#ffe7ef;    /* alerta */
     --focus:#008cb7;
-    --radius:12px;
-    --shadow:0 8px 24px rgba(0,78,119,.10);
-    /* Tipografía fluida: escala con el viewport dentro de límites */
-    --fs-base:clamp(15px, 0.9rem + 0.2vw, 17px);
-    --fs-h1:clamp(1.35rem, 1.1rem + 1.4vw, 1.75rem);
-    --fs-h2:clamp(1.05rem, 0.98rem + 0.4vw, 1.2rem);
+    /* Radios en escala: pequeño (controles) · base (tarjetas) · grande (diálogos) */
+    --radius:14px;
+    --radius-sm:9px;
+    --radius-lg:20px;
+    /* Sombras en capas para dar profundidad sin ensuciar */
+    --shadow-sm:0 1px 3px rgba(0,60,95,.06), 0 2px 8px rgba(0,78,119,.06);
+    --shadow:0 4px 14px rgba(0,70,110,.08), 0 10px 30px rgba(0,70,110,.06);
+    --shadow-lg:0 18px 48px rgba(0,55,90,.16);
+    /* Tipografía · stack de sistema moderno (CSP: font-src 'self', sin fuentes web).
+       Se prioriza la variante de UI de cada sistema y se activan cifras tabulares
+       donde alinear números importa (relojes, métricas, horarios). */
+    --font-ui:"SF Pro Text","Segoe UI Variable Text",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+    /* Escala tipográfica fluida (razón ~1.2), más aireada que la anterior */
+    --fs-base:clamp(15px, 0.9rem + 0.2vw, 16.5px);
+    --fs-sm:clamp(.8rem, .77rem + .12vw, .875rem);
+    --fs-h1:clamp(1.55rem, 1.2rem + 1.5vw, 2.05rem);
+    --fs-h2:clamp(1.15rem, 1.02rem + 0.5vw, 1.38rem);
+    --fs-h3:clamp(1rem, .95rem + .28vw, 1.12rem);
     --tap:44px; /* tamaño táctil mínimo (WCAG) */
   }
   /* Modo claro por defecto. El oscuro es OPCIONAL desde Ajustes
@@ -71,7 +83,10 @@
     --good:#45e3bd; --good-bg:#073c42;
     --warn:#ffcb5b; --warn-bg:#3f2a0a;
     --bad:#ff7da2;  --bad-bg:#45152c;
-    --focus:#00e6ef; --shadow:0 12px 30px rgba(0,0,0,.25);
+    --focus:#00e6ef;
+    --shadow-sm:0 1px 3px rgba(0,0,0,.35);
+    --shadow:0 8px 26px rgba(0,0,0,.30);
+    --shadow-lg:0 22px 54px rgba(0,0,0,.42);
   }
   /* Alto contraste (negro sobre blanco, bordes marcados) */
   body.high{
@@ -82,7 +97,7 @@
     --good:#005c3c; --good-bg:#dff5ec;
     --warn:#7a3d00; --warn-bg:#fff0d6;
     --bad:#a5001f;  --bad-bg:#ffe0e6;
-    --focus:#0a4f43; --shadow:none;
+    --focus:#0a4f43; --shadow:none; --shadow-sm:none; --shadow-lg:none;
   }
   /* Fuente y controles grandes */
   body.large{ --fs-base:19px; --tap:52px; }
@@ -93,11 +108,20 @@
   html{ scroll-behavior:smooth; }
   body{
     margin:0; background:var(--bg); color:var(--ink);
-    font:var(--fs-base)/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font:var(--fs-base)/1.55 var(--font-ui);
     -webkit-text-size-adjust:100%;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    text-rendering:optimizeLegibility;
   }
   button,input,select,textarea{ font:inherit; color:inherit; }
-  h1,h2,h3{ line-height:1.2; }
+  /* Jerarquía tipográfica: títulos con tracking negativo (aspecto moderno)
+     y equilibrio de saltos de línea donde el navegador lo permite. */
+  h1,h2,h3{ line-height:1.18; letter-spacing:-.015em; text-wrap:balance; }
+  h1{ letter-spacing:-.025em; font-weight:800; }
+  /* Cifras tabulares: números que no “bailan” en relojes, métricas y horarios. */
+  .clock strong,.stat .n,.stat-mini .n,.time,.cal-cell,.cal-num,.pin{
+    font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;
+  }
 
   /* Foco visible y consistente para navegación por teclado */
   :focus-visible{ outline:3px solid var(--focus); outline-offset:2px; border-radius:6px; }
@@ -132,22 +156,25 @@
   }
   body.dark .side{ background:linear-gradient(160deg,#010b25 0%,#043561 62%,#006d8a 150%); }
   body.high .side{ background:#000; }
-  .brand{ display:flex; align-items:center; gap:10px; font-size:1.35rem; font-weight:700; margin:0 8px 26px; }
+  .brand{ display:flex; align-items:center; gap:11px; font-size:1.32rem; font-weight:800; letter-spacing:-.02em; margin:0 8px 26px; }
   .brand i{
-    width:38px; height:38px; border-radius:11px;
-    background:#00cfd2; box-shadow:0 4px 14px rgba(0,207,210,.38);
-    color:#fff; display:grid; place-items:center; font-style:normal; font-size:1.1rem;
+    width:40px; height:40px; border-radius:12px;
+    background:linear-gradient(135deg,#12dbdd 0%,#00a7c4 100%);
+    box-shadow:0 6px 18px rgba(0,207,210,.42);
+    color:#04223b; display:grid; place-items:center; font-style:normal;
   }
+  .brand i svg{ width:22px; height:22px; display:block; }
   .nav a .ic svg{ display:block; }
   .nav{ display:flex; flex-direction:column; gap:4px; }
   .nav a{
     display:flex; align-items:center; gap:12px; min-height:var(--tap);
-    padding:10px 14px; border-radius:10px; color:#c8e8f2;
-    text-decoration:none; font-weight:600;
+    padding:11px 14px; border-radius:12px; color:#cbe9f3;
+    text-decoration:none; font-weight:600; letter-spacing:-.01em;
+    transition:background .15s ease, color .15s ease, box-shadow .15s ease;
   }
   .nav a .ic{ width:22px; height:22px; display:grid; place-items:center; flex:none; }
-  .nav a:hover{ background:rgba(255,255,255,.10); color:#fff; }
-  .nav a[aria-current="page"]{ background:#008cb3; color:#fff; }
+  .nav a:hover{ background:rgba(255,255,255,.12); color:#fff; }
+  .nav a[aria-current="page"]{ background:#0a97c0; color:#fff; box-shadow:0 4px 14px rgba(0,140,180,.42); }
   body.high .nav a{ color:#fff; }
   body.high .nav a[aria-current="page"]{ background:#fff; color:#000; }
   .side-foot{ margin-top:auto; color:#9bd5e5; font-size:.8rem; padding:12px 8px 0; }
@@ -197,12 +224,18 @@
     background:var(--surface); border:1px solid var(--line);
     border-radius:var(--radius); padding:10px 12px;
   }
+  .stat-mini{ transition:box-shadow .15s ease, transform .15s ease; }
   .stat-mini .icon{
-    width:34px; height:34px; border-radius:9px; flex:none;
+    width:36px; height:36px; border-radius:10px; flex:none;
     background:var(--primary-soft); color:var(--primary-soft-ink);
-    display:grid; place-items:center; font-size:1rem;
+    display:grid; place-items:center;
   }
-  .stat-mini .n{ font-size:1.35rem; font-weight:700; line-height:1.1; }
+  .stat-mini .icon svg{ width:20px; height:20px; display:block; }
+  /* Métricas con color semántico (pendiente / administrado / alerta) */
+  .stat-mini.warn .icon{ background:var(--warn-bg); color:var(--warn); }
+  .stat-mini.good .icon{ background:var(--good-bg); color:var(--good); }
+  .stat-mini.bad  .icon{ background:var(--bad-bg);  color:var(--bad);  }
+  .stat-mini .n{ font-size:1.5rem; font-weight:800; line-height:1.05; letter-spacing:-.02em; }
   .stat-mini .label{ font-size:.76rem; color:var(--muted); }
 
   /* Ficha del paciente como icono desplegable en el encabezado */
@@ -236,8 +269,8 @@
   .time-row .input{ max-width:170px; }
   .time-row [data-remtime]{ min-height:38px; padding:6px 12px; }
 
-  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
-  .card > b{ display:block; margin-bottom:6px; }
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow-sm); }
+  .card > b{ display:block; margin-bottom:8px; letter-spacing:-.01em; }
 
   .stat{ position:relative; }
   .stat .label{ color:var(--muted); font-size:.85rem; }
@@ -294,8 +327,10 @@
   .input{
     min-height:var(--tap); width:100%;
     border:1px solid var(--line); background:var(--surface); color:var(--ink);
-    padding:10px 12px; border-radius:10px;
+    padding:11px 13px; border-radius:var(--radius-sm);
+    transition:border-color .15s ease, box-shadow .15s ease;
   }
+  .input:focus{ border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
   .input::placeholder{ color:var(--muted); opacity:1; }
   .search{ max-width:340px; }
 
@@ -364,8 +399,8 @@
   .modal-backdrop[hidden]{ display:none; }
   .dialog{
     background:var(--surface); color:var(--ink); border:1px solid var(--line);
-    border-radius:18px; padding:24px; width:min(760px,100%); max-height:92vh; overflow:auto;
-    box-shadow:0 20px 60px rgba(0,0,0,.35);
+    border-radius:var(--radius-lg); padding:26px; width:min(760px,100%); max-height:92vh; overflow:auto;
+    box-shadow:var(--shadow-lg);
   }
   .dialog.sm{ width:min(440px,100%); }
   .dialog h2{ margin:0 0 16px; font-size:var(--fs-h2); }
@@ -511,6 +546,78 @@
     .detail{ grid-template-columns:1fr; }
     .detail-photo{ max-width:220px; }
   }
+
+  /* 9. CALENDARIO Y RESUMEN DIARIO --------------------------- */
+  /* Dos columnas: mes navegable + resumen del día elegido. En móvil
+     se apilan (calendario arriba, resumen debajo). */
+  /* minmax(0,…) + min-width:0: sin ellos los hijos de un grid usan
+     min-width:auto y el calendario ensancha la página en móvil. */
+  .cal{ display:grid; grid-template-columns:minmax(0,330px) minmax(0,1fr); gap:18px; align-items:start; }
+  .cal-panel{ min-width:0; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:16px; }
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
+  .cal-title{ font-weight:800; letter-spacing:-.01em; text-transform:capitalize; font-size:1.02rem; }
+  .cal-nav{ display:inline-flex; gap:6px; }
+  .cal-nav button{
+    width:40px; height:40px; border-radius:var(--radius-sm); border:1px solid var(--line);
+    background:var(--surface); color:var(--ink); display:grid; place-items:center; cursor:pointer;
+    transition:background .12s ease;
+  }
+  /* Modo "fuente y botones grandes": el calendario también crece */
+  body.large .cal-nav button{ width:var(--tap); height:var(--tap); }
+  body.large .cal-cell{ height:var(--tap); font-size:1rem; }
+  .cal-nav button:hover{ background:var(--surface-2); }
+  .cal-nav button svg{ width:18px; height:18px; display:block; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+  .cal-dow{ text-align:center; font-size:.68rem; font-weight:700; color:var(--muted); padding:4px 0 6px; text-transform:uppercase; letter-spacing:.04em; }
+  .cal-cell{
+    position:relative; min-width:0; height:42px; border:1.5px solid transparent;
+    border-radius:10px; background:transparent; color:var(--ink); cursor:pointer;
+    font-weight:600; display:flex; align-items:center; justify-content:center;
+    padding:0; font-size:.92rem;
+    transition:background .12s ease, border-color .12s ease;
+  }
+  .cal-cell:hover{ background:var(--surface-2); }
+  .cal-cell.empty{ visibility:hidden; pointer-events:none; }
+  .cal-cell.today{ border-color:var(--primary); }
+  .cal-cell.sel{ background:var(--primary); color:var(--primary-ink); font-weight:800; border-color:transparent; }
+  .cal-cell.sel:hover{ background:var(--primary); }
+  .cal-cell .dot{ position:absolute; bottom:5px; left:50%; transform:translateX(-50%); width:6px; height:6px; border-radius:50%; background:var(--primary); }
+  .cal-cell .dot.good{ background:var(--good); } .cal-cell .dot.warn{ background:var(--warn); } .cal-cell .dot.bad{ background:var(--bad); }
+  .cal-cell.sel .dot{ background:var(--primary-ink); }
+  body.high .cal-cell.today{ border-color:#000; }
+
+  /* Resumen del día seleccionado (línea de tiempo) */
+  .day{ min-width:0; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:18px 20px; }
+  .day-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .day-date{ font-weight:800; font-size:1.12rem; letter-spacing:-.015em; text-transform:capitalize; margin:0; }
+  .day-count{ color:var(--muted); font-size:.85rem; margin:2px 0 0; }
+  .day-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .tl{ display:flex; flex-direction:column; }
+  .tl-item{ display:flex; gap:12px; padding:12px 2px; border-bottom:1px solid var(--line); }
+  .tl-item:last-child{ border:0; }
+  .tl-ic{ width:34px; height:34px; border-radius:var(--radius-sm); flex:none; display:grid; place-items:center; background:var(--primary-soft); color:var(--primary-soft-ink); }
+  .tl-ic svg{ width:18px; height:18px; display:block; }
+  .tl-ic.good{ background:var(--good-bg); color:var(--good); }
+  .tl-ic.warn{ background:var(--warn-bg); color:var(--warn); }
+  .tl-ic.bad{ background:var(--bad-bg); color:var(--bad); }
+  .tl-ic.muted{ background:var(--surface-2); color:var(--muted); }
+  .tl-body{ min-width:0; flex:1; }
+  .tl-meta{ display:flex; align-items:center; gap:9px; margin-bottom:1px; }
+  .tl-time{ color:var(--muted); font-weight:700; font-size:.82rem; }
+  .tl-kind{ font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .tl-text{ font-size:.95rem; line-height:1.4; overflow-wrap:anywhere; }
+
+  @media (max-width:860px){ .cal{ grid-template-columns:minmax(0,1fr); } }
+  @media (max-width:390px){
+    .cal-panel{ padding:12px; }
+    .cal-cell{ height:38px; font-size:.86rem; }
+    .cal-grid{ gap:3px; }
+    .day{ padding:15px 14px; }
+  }
+
+  /* Aviso al grupo: destino principal, por eso se destaca sobre el resto */
+  .wa-group{ border-color:var(--primary); border-left:4px solid var(--primary); background:var(--surface); }
+  body.high .wa-group{ border-color:#000; }
   </style>
 </head>
 <body>
@@ -519,7 +626,7 @@
   <div class="app">
     <!-- Navegación principal: enlaces (navegan entre vistas) -->
     <aside class="side">
-      <div class="brand"><i aria-hidden="true">✚</i> Cuida</div>
+      <div class="brand"><i aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></i> Cuida</div>
       <nav class="nav" id="nav" aria-label="Secciones"></nav>
       <p class="side-foot" id="sideFoot">Los datos no salen de este dispositivo.<br>Sin servidor ni base de datos externa.</p>
     </aside>
@@ -589,6 +696,30 @@ function escapeHtml(v){
   return String(v ?? '').replace(/[&<>"']/g, c => (
     {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
   ));
+}
+
+/* ------------------------------------------------------------
+   Set de iconos (una sola familia visual: trazo 1.9, esquinas
+   redondeadas, viewBox 24). Reutilizable en panel, calendario y
+   avisos para que TODO el producto hable el mismo lenguaje gráfico.
+   ------------------------------------------------------------ */
+const ICONS = {
+  clock:    '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.6V12l3 1.8"/>',
+  check:    '<path d="M4.5 12.5 10 18 20 6"/>',
+  alert:    '<path d="M12 4 21 19H3L12 4Z"/><path d="M12 10v4"/><path d="M12 16.6h.01"/>',
+  pill:     '<path d="M10.5 3.5 3.5 10.5a5 5 0 0 0 7 7l7-7a5 5 0 0 0-7-7Z"/><path d="M7 7l7 7"/>',
+  heart:    '<path d="M12 20.5S3.5 15.5 3.5 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.5 2.3C20.5 15.5 12 20.5 12 20.5Z"/>',
+  rescue:   '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.2"/><path d="M5.6 5.6 9.7 9.7M14.3 14.3 18.4 18.4M18.4 5.6 14.3 9.7M9.7 14.3 5.6 18.4"/>',
+  send:     '<path d="M21 3 10.5 13.5"/><path d="M21 3 14 21l-3.4-7.6L3 10 21 3Z"/>',
+  box:      '<path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5v-9Z"/><path d="M3.5 7.5 12 12l8.5-4.5"/><path d="M12 12v9"/>',
+  gear:     '<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .3 1.9 2 2 0 1 1-2.8 2.8 1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2 2 2 0 1 1-2.8-2.8 1.7 1.7 0 0 0-1.2-2.9 2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9A2 2 0 1 1 7.3 3.9 1.7 1.7 0 0 0 10.2 2.7a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2 2 2 0 1 1 2.8 2.8 1.7 1.7 0 0 0 1.2 2.9 2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.7 1.7Z"/>',
+  user:     '<circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.6"/><path d="M3.5 9.6h17M8 3v4M16 3v4"/>',
+  left:     '<path d="M14.5 5 8 12l6.5 7"/>',
+  right:    '<path d="M9.5 5 16 12l-6.5 7"/>',
+};
+function svgIcon(name, size = 20){
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
 
 /* ------------------------------------------------------------
@@ -1353,7 +1484,8 @@ class App{
     if(alHeredado != null && settingsPrevias.autolock == null) settingsPrevias.autolock = +alHeredado;
     this.state.settings = Object.assign(
       { dark:false, large:false, high:false, sound:false, notifications:false,
-        autolock:5, medView:'tabla', lastBackup:'', whatsapp:true, whatsappGroup:'' },
+        autolock:5, medView:'tabla', lastBackup:'', whatsapp:true,
+        whatsappGroup:'', whatsappGroupName:'Hermanos' },
       settingsPrevias);
 
     // El PIN deja de vivir por dispositivo y pasa al perfil central (state.pin).
@@ -1795,7 +1927,9 @@ class App{
       </details>`;
   }
   treatmentHTML(){ return this.medsHTML() + this.section('Inventario', this.inventoryHTML()); }
-  recordHTML(){ return this.symptomsHTML() + this.section('Historial reciente', this.historyHTML(),
+  recordHTML(){ return this.symptomsHTML()
+    + this.section('Resumen por día', this.calendarSection())
+    + this.section('Historial reciente', this.historyHTML(),
     '<button class="btn secondary small" type="button" data-action="exportCSV">Exportar CSV</button>'); }
 
   dashboardHTML(){
@@ -1828,10 +1962,10 @@ class App{
       </header>`
       + this.onboardingHTML() + `
       <div class="metrics">
-        <div class="stat-mini"><span class="icon" aria-hidden="true">◷</span><div><div class="n">${this.pending()}</div><div class="label">Pendientes hoy</div></div></div>
-        <div class="stat-mini"><span class="icon" aria-hidden="true">✓</span><div><div class="n">${done}</div><div class="label">Administrados</div></div></div>
-        <div class="stat-mini"><span class="icon" aria-hidden="true">!</span><div><div class="n">${alerts.length}</div><div class="label">Alertas</div></div></div>
-        <div class="stat-mini"><span class="icon" aria-hidden="true">♡</span><div><div class="n">${symToday}</div><div class="label">Síntomas hoy</div></div></div>
+        <div class="stat-mini warn"><span class="icon">${svgIcon('clock')}</span><div><div class="n">${this.pending()}</div><div class="label">Pendientes hoy</div></div></div>
+        <div class="stat-mini good"><span class="icon">${svgIcon('check')}</span><div><div class="n">${done}</div><div class="label">Administrados</div></div></div>
+        <div class="stat-mini bad"><span class="icon">${svgIcon('alert')}</span><div><div class="n">${alerts.length}</div><div class="label">Alertas</div></div></div>
+        <div class="stat-mini"><span class="icon">${svgIcon('heart')}</span><div><div class="n">${symToday}</div><div class="label">Síntomas hoy</div></div></div>
       </div>
       <div class="grid" style="margin-top:18px">
         <div class="card">
@@ -2048,6 +2182,138 @@ class App{
       <div class="card"><ul class="list" id="historyRows">${rows}</ul></div>`;
   }
 
+  /* ============================================================
+     RESUMEN POR DÍA (calendario)
+     Fuente única: state.history, donde YA se registran todos los
+     eventos (medicación, síntomas, rescates, avisos, inventario,
+     cuidadores, configuración) con su fecha ISO y su tipo. Se elige
+     un día en el calendario y se ve, en línea de tiempo, qué pasó.
+     ============================================================ */
+  /* Clasifica un evento del historial en un tipo visual coherente. */
+  kindMeta(h){
+    const t = h.type, x = h.text || '';
+    if(t === 'medicación') return /omit/i.test(x)
+      ? { icon:'alert',  sev:'bad',   label:'Omitido',       key:'skip',    dot:'bad'  }
+      : { icon:'check',  sev:'good',  label:'Administrado',  key:'admin',   dot:'good' };
+    if(t === 'síntomas')   return { icon:'heart',  sev:'warn',  label:'Síntomas',      key:'symptom', dot:'warn' };
+    if(t === 'rescate')    return { icon:'rescue', sev:'bad',   label:'Rescate',       key:'rescue',  dot:'bad'  };
+    if(t === 'aviso')      return { icon:'send',   sev:'muted', label:'Aviso',         key:'notice',  dot:''     };
+    if(t === 'inventario') return { icon:'box',    sev:'muted', label:'Inventario',    key:'other',   dot:''     };
+    if(t === 'cuidador')   return { icon:'user',   sev:'muted', label:'Cuidador',      key:'other',   dot:''     };
+    return                        { icon:'gear',   sev:'muted', label:'Configuración', key:'other',   dot:''     };
+  }
+  /* Agrupa el historial por día local (YYYY-MM-DD). */
+  eventsByDay(){
+    const by = {};
+    for(const h of this.state.history){
+      const d = isoDate(new Date(h.date));
+      (by[d] = by[d] || []).push(h);
+    }
+    return by;
+  }
+  /* Contenedor estable: renderCalendar() solo reemplaza su interior. */
+  calendarSection(){ return `<div id="calWrap" class="cal">${this.calendarInner()}</div>`; }
+  renderCalendar(){ const w = document.getElementById('calWrap'); if(w) w.innerHTML = this.calendarInner(); }
+  shiftMonth(n){
+    const [y, mo] = this.calMonth.split('-').map(Number);
+    const d = new Date(y, mo - 1 + n, 1);
+    this.calMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    this.renderCalendar();
+  }
+  selectDay(iso){ this.calDay = iso; this.calMonth = iso.slice(0,7); this.renderCalendar(); }
+
+  calendarInner(){
+    if(!this.calDay)   this.calDay   = isoDate();
+    if(!this.calMonth) this.calMonth = this.calDay.slice(0,7);
+    const by = this.eventsByDay();
+
+    /* --- Rejilla del mes (lunes primero) --- */
+    const [y, mo] = this.calMonth.split('-').map(Number);
+    const first   = new Date(y, mo - 1, 1);
+    const offset  = (first.getDay() + 6) % 7;            // 0=lunes
+    const total   = new Date(y, mo, 0).getDate();
+    const hoy     = isoDate();
+    const dow     = ['L','M','X','J','V','S','D'];
+    const mesNom  = first.toLocaleDateString('es-CO', { month:'long', year:'numeric' });
+    const mesCap  = mesNom.charAt(0).toUpperCase() + mesNom.slice(1);
+
+    let celdas = '';
+    for(let i = 0; i < offset; i++)
+      celdas += '<span class="cal-cell empty" aria-hidden="true"></span>';
+    for(let d = 1; d <= total; d++){
+      const iso  = `${this.calMonth}-${String(d).padStart(2,'0')}`;
+      const evs  = by[iso] || [];
+      const sel  = iso === this.calDay;
+      const esHoy = iso === hoy;
+      let dotCls = '';
+      if(evs.length){
+        const dots = evs.map(e => this.kindMeta(e).dot);
+        dotCls = dots.includes('bad') ? 'bad' : dots.includes('warn') ? 'warn' : dots.includes('good') ? 'good' : '';
+      }
+      const dot   = evs.length ? `<span class="dot ${dotCls}"></span>` : '';
+      const aria  = `${d} de ${mesNom}: ${evs.length ? evs.length + (evs.length === 1 ? ' registro' : ' registros') : 'sin registros'}`;
+      celdas += `<button class="cal-cell${sel ? ' sel' : ''}${esHoy ? ' today' : ''}" type="button"
+        data-action="calDay" data-id="${iso}"${sel ? ' aria-current="date"' : ''} aria-label="${aria}">${d}${dot}</button>`;
+    }
+
+    const panel = `<div class="cal-panel">
+      <div class="cal-head">
+        <span class="cal-title">${escapeHtml(mesCap)}</span>
+        <span class="cal-nav">
+          <button type="button" data-action="calPrev" aria-label="Mes anterior">${svgIcon('left', 18)}</button>
+          <button type="button" data-action="calNext" aria-label="Mes siguiente">${svgIcon('right', 18)}</button>
+        </span>
+      </div>
+      <div class="cal-grid">
+        ${dow.map(d => `<span class="cal-dow">${d}</span>`).join('')}
+        ${celdas}
+      </div>
+    </div>`;
+
+    return panel + this.daySummaryHTML(by[this.calDay] || []);
+  }
+
+  daySummaryHTML(eventos){
+    const evs = eventos.slice().sort((a, b) => a.date.localeCompare(b.date)); // mañana → noche
+    const fecha = prettyDate(this.calDay);
+    const fechaCap = fecha.charAt(0).toUpperCase() + fecha.slice(1);
+
+    /* Resumen en píldoras (solo las categorías con eventos) */
+    const c = { admin:0, skip:0, symptom:0, rescue:0 };
+    evs.forEach(e => { const k = this.kindMeta(e).key; if(k in c) c[k]++; });
+    const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+    const chips = [];
+    if(c.admin)   chips.push(`<span class="pill">${plural(c.admin, 'administrada', 'administradas')}</span>`);
+    if(c.skip)    chips.push(`<span class="pill bad">${plural(c.skip, 'omitida', 'omitidas')}</span>`);
+    if(c.symptom) chips.push(`<span class="pill warn">${plural(c.symptom, 'síntoma', 'síntomas')}</span>`);
+    if(c.rescue)  chips.push(`<span class="pill bad">${plural(c.rescue, 'rescate', 'rescates')}</span>`);
+
+    const items = evs.map(e => {
+      const m = this.kindMeta(e);
+      const hora = new Date(e.date).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
+      return `<div class="tl-item">
+        <span class="tl-ic ${m.sev}">${svgIcon(m.icon, 18)}</span>
+        <div class="tl-body">
+          <div class="tl-meta"><span class="tl-time">${hora}</span><span class="tl-kind">${escapeHtml(m.label)}</span></div>
+          <div class="tl-text">${escapeHtml(e.text)}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="day">
+      <div class="day-head">
+        <div>
+          <p class="day-date">${escapeHtml(fechaCap)}</p>
+          <p class="day-count">${plural(evs.length, 'registro', 'registros')}</p>
+        </div>
+        ${chips.length ? `<div class="day-chips">${chips.join('')}</div>` : ''}
+      </div>
+      ${evs.length
+        ? `<div class="tl">${items}</div>`
+        : '<p class="empty">Sin registros este día. Elige otra fecha marcada con un punto en el calendario.</p>'}
+    </div>`;
+  }
+
   /* --- Vista de cuidadores (cada uno con varios medicamentos) --- */
   caregiversHTML(){
     const medChip = m => `<span class="chip"><span class="dot" style="background:${escapeHtml(m.color||'#007fa8')}"></span>${escapeHtml(m.name)}</span>`;
@@ -2102,10 +2368,15 @@ class App{
         <div class="card">
           <b>Accesibilidad y avisos</b>
           ${toggles.map(([k,label]) => `<label class="switch"><span>${label}</span><input type="checkbox" data-setting="${k}" ${s[k]?'checked':''}></label>`).join('')}
+          <label style="display:block;margin-top:14px">Nombre del grupo de WhatsApp
+            <input class="input" id="whatsappGroupName" type="text" maxlength="40"
+              placeholder="Hermanos" value="${escapeHtml(s.whatsappGroupName || 'Hermanos')}">
+            <span class="hint">Grupo que recibe los avisos de medicación (por defecto, los tres cuidadores).</span>
+          </label>
           <label style="display:block;margin-top:14px">Enlace del grupo de WhatsApp
             <input class="input" id="whatsappGroup" type="url" inputmode="url" autocomplete="url"
               placeholder="https://chat.whatsapp.com/..." value="${escapeHtml(s.whatsappGroup || '')}">
-            <span class="hint">Opcional. Pega el enlace de invitación del grupo que recibirá los avisos.</span>
+            <span class="hint">Abre el grupo en WhatsApp → Info del grupo → Invitar con enlace → Copiar. Pégalo aquí.</span>
           </label>
           <p class="muted" style="font-size:.82rem;margin-top:12px">
             El aviso de WhatsApp usa un enlace normal con el mensaje escrito: no hay API, ni credenciales,
@@ -2303,6 +2574,12 @@ class App{
       this.state.settings.whatsappGroup = groupInput.value.trim();
       this.save();
     };
+
+    const groupNameInput = document.getElementById('whatsappGroupName');
+    if(groupNameInput) groupNameInput.onchange = () => {
+      this.state.settings.whatsappGroupName = groupNameInput.value.trim() || 'Hermanos';
+      this.save();
+    };
   }
 
   /* --- Enrutado de acciones (delegación) --- */
@@ -2325,6 +2602,9 @@ class App{
         this.state.settings.medView = id;
         this.save(); return this.render();
       case 'exportCSV': return this.exportCSV();
+      case 'calPrev': return this.shiftMonth(-1);
+      case 'calNext': return this.shiftMonth(1);
+      case 'calDay': return this.selectDay(id);
       case 'goSettings': return this.go('settings');
       case 'resetAgenda':
         this.state.agenda = MedicationSchedule.today(this.state.medications);
@@ -2407,14 +2687,20 @@ class App{
     }catch{ return ''; }
   }
 
+  /* Nombre del grupo que recibe los avisos (por defecto, "Hermanos"). */
+  groupName(){ return (this.state.settings.whatsappGroupName || 'Hermanos').trim() || 'Hermanos'; }
+
   whatsappNotice(a, m, quien){
     if(this.state.settings.whatsapp === false) return;
     const { asignados, otros } = this.waRecipients(m, quien);
     const lista = asignados.concat(otros);
-    if(!lista.length) return;
+    const groupLink = this.whatsappGroupLink();
+    /* El grupo es el destino principal: si está configurado, el aviso se
+       ofrece aunque ningún cuidador tenga celular guardado. */
+    if(!lista.length && !groupLink) return;
 
     const texto = this.waMessage(m, a, quien);
-    const groupLink = this.whatsappGroupLink();
+    const grupo = this.groupName();
     const fila = (c, esResponsable) => `
       <li>
         <span class="car-line">
@@ -2441,24 +2727,33 @@ class App{
       <p class="hint">Se abre WhatsApp con el mensaje ya escrito; el envío lo confirmas tú desde la
         aplicación. Cuida no manda nada por su cuenta ni usa ningún servicio externo.</p>
 
-      <div class="card" style="margin-top:18px;padding:14px">
-        <b>Enviar al grupo</b>
+      <div class="card wa-group" style="margin-top:18px">
+        <b>Avisar al grupo ${escapeHtml(grupo)}</b>
         ${groupLink
-          ? `<p class="hint">Copia el mensaje y abre el grupo. El modal permanecerá abierto mientras terminas los avisos.</p>
-             <div class="actions">
+          ? `<p class="hint">Destino habitual del aviso. Copia el mensaje, abre el grupo y pégalo:
+               WhatsApp no permite enviar texto ya escrito a un grupo desde un enlace.
+               El modal sigue abierto mientras terminas.</p>
+             <div class="actions" style="margin-top:10px">
                <button class="btn secondary small" type="button" id="copyWaMessage">Copiar mensaje</button>
                <a class="btn wa small" target="_blank" rel="noopener noreferrer" id="sendWaGroup"
-                  href="${escapeHtml(groupLink)}" aria-label="Abrir el grupo de WhatsApp">👥 Abrir grupo</a>
+                  href="${escapeHtml(groupLink)}"
+                  aria-label="Abrir el grupo ${escapeHtml(grupo)} en WhatsApp">Abrir grupo ${escapeHtml(grupo)}</a>
              </div>`
-          : `<p class="hint">Configura el enlace del grupo en Ajustes para enviar este aviso al grupo.</p>`}
+          : `<p class="hint">Aún no hay enlace del grupo ${escapeHtml(grupo)}. Configúralo en Ajustes
+               para avisar de una sola vez a los tres cuidadores.</p>
+             <div class="actions" style="margin-top:10px">
+               <button class="btn secondary small" type="button" id="copyWaMessage">Copiar mensaje</button>
+               <button class="btn small" type="button" id="waGoSettings" data-close>Configurar grupo</button>
+             </div>`}
       </div>
 
-      <div style="margin-top:18px"><b>Enviar a un cuidador</b>
+      ${lista.length ? `<div style="margin-top:18px"><b>O avisar a alguien en particular</b>
+        <p class="hint">Solo si necesitas contactar a una persona aparte del grupo.</p>
         <ul class="list" id="waList">
           ${asignados.map(c => fila(c, true)).join('')}
           ${otros.map(c => fila(c, false)).join('')}
         </ul>
-      </div>
+      </div>` : ''}
       <div class="modal-foot">
         <button class="btn secondary" type="button" data-close>Ahora no</button>
       </div>`);
@@ -2479,17 +2774,21 @@ class App{
     if(copyButton) copyButton.onclick = async () => {
       try{
         await navigator.clipboard.writeText(caja.value);
-        toast('Mensaje copiado. Pégalo en el grupo de WhatsApp.', 'good');
+        toast(`Mensaje copiado. Pégalo en el grupo ${grupo}.`, 'good');
       }catch{
         caja.focus(); caja.select();
-        toast('Selecciona el mensaje y cópialo para enviarlo al grupo.', 'good');
+        toast(`Selecciona el mensaje y cópialo para enviarlo al grupo ${grupo}.`, 'good');
       }
     };
 
+    // El modal vive fuera de #main, así que la delegación de acciones no lo alcanza.
+    const cfgButton = document.getElementById('waGoSettings');
+    if(cfgButton) cfgButton.onclick = () => this.go('settings');
+
     const groupButton = document.getElementById('sendWaGroup');
     if(groupButton) groupButton.onclick = () => {
-      registrarAviso('el grupo de WhatsApp');
-      toast('Grupo de WhatsApp abierto. Pega el mensaje y envíalo.', 'good');
+      registrarAviso(`el grupo ${grupo}`);
+      toast(`Grupo ${grupo} abierto. Pega el mensaje y envíalo.`, 'good');
     };
 
     // El modal sigue abierto para poder informar a varias personas.
